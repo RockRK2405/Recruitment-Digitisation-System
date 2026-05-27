@@ -83,10 +83,10 @@ To run the standard OpenCV and Tesseract fallbacks, install these packages via y
     ```bash
     pip3 install -r requirements.txt
     ```
-3.  Set your Gemini API Key in the `.env` file (if empty or left as is, the parser will utilize regex heuristics, running completely offline and free!):
-    ```env
-    GEMINI_API_KEY="your_api_key_here"
-    ```
+3.  **Active In-Process LLM Provider:**
+    *   **Local LLM (Default & 100% Free):** Kshamata is configured out-of-the-box to use **Ollama** running your local **`gemma4:e4b`** model locally inside [services/resume_parser/parser.py](file:///Users/rudrakhale/Desktop/Recruitment%20Digitisation%20System/services/resume_parser/parser.py). It requires no API key, does not call the internet, and runs fully on your machine at **zero cost**!
+    *   **Regex Fallback (100% Free):** If your local Ollama server is offline or fails, Kshamata automatically falls back to our local regex heuristics in pure Python, which is also completely offline and free.
+    *   **Gemini Option:** If you ever want to use external Gemini APIs, you can swap the provider in `.env` by setting `LLM_PROVIDER=gemini` and providing your `GEMINI_API_KEY=""` (which offers a generous free tier in Google AI Studio).
 
 ### 3. Initialize & Seed Database
 Build the SQL schemas and seed standard job descriptions (Boiler Attendant, Mining Sirdar, etc.) with a mock worker process trace:
