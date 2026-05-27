@@ -1,0 +1,26 @@
+# Python compiled files and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+env/
+venv/
+ENV/
+
+# Local environmental config with credentials
+.env
+
+# SQLite local fallback DB & persistent ChromaDB directory
+data/local_fallback.db
+data/chromadb/
+
+# Temporary resume uploads (Except the platform blueprint graphic!)
+data/uploads/*
+!data/uploads/kshamata_platform_blueprint.png
+
+# Operating system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

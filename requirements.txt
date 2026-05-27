@@ -1,0 +1,32 @@
+# FastAPI Web Engine
+fastapi>=0.110.0
+uvicorn>=0.28.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.1
+pydantic>=2.6.4
+pydantic-settings>=2.2.1
+
+# Streamlit User Interface
+streamlit>=1.32.0
+pandas>=2.2.1
+plotly>=5.19.0
+requests>=2.31.0
+
+# Database & Vector DB
+sqlalchemy>=2.0.28
+psycopg2-binary>=2.9.9
+chromadb>=0.4.24
+
+# Semantic Intelligence & Embeddings
+sentence-transformers>=2.6.0
+google-genai>=0.1.1
+
+# Document OCR & Preprocessing
+numpy>=1.26.4
+opencv-python-headless>=4.9.0.80
+pytesseract>=0.3.10
+pypdf>=4.1.0
+pdfplumber>=0.11.0
+# Note: paddleocr requires extra platform packages (e.g. shapely, pyclipper).
+# Our engine is written dynamically to import and run paddleocr if present,
+# otherwise seamlessly falling back to pytesseract and digital parsing.
