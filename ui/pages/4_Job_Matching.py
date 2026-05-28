@@ -158,40 +158,35 @@ else:
                     penalty_tag = '<span class="badge badge-failed">⚠️ 50% SAFETY COMPLIANCE PENALTY APPLIED</span>'
                 
                 st.markdown(
-                    f"""
-                    <div style="background: rgba(22, 26, 32, 0.85); border: 1px solid rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.8rem;">
-                            <div>
-                                <span style="font-size: 1.3rem; font-weight: 600; color: #ffffff;">#{idx+1} {rank['candidate_name']}</span>
-                                <span style="margin-left: 0.5rem;" class="badge {badge_class}">{hiring_status.upper()}</span>
-                                <span style="margin-left: 0.5rem;">{penalty_tag}</span>
-                            </div>
-                            <div style="font-size: 1.6rem; font-weight: bold; color: {score_color};">
-                                {overall}%
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 0.95rem; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.8rem;">
-                            <div><b>Vector Score:</b> <br/><span style="color: #00b0ff; font-weight:bold;">{rank['vector_score']}%</span></div>
-                            <div><b>Technical Skills Score:</b> <br/><span style="color: #ffd700; font-weight:bold;">{rank['skill_score']}%</span></div>
-                            <div><b>Safety Credential Score:</b> <br/><span style="color: #00e676; font-weight:bold;">{rank['cert_score']}%</span></div>
-                        </div>
-                        
-                        <div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; font-size: 0.9rem;">
-                            <div>
-                                <span style="color: #00e676;"><b>✓ Matched Skills:</b></span> {", ".join(rank['matched_skills']) if rank['matched_skills'] else 'None'}<br/>
-                                <span style="color: #ff1744;"><b>✗ Missing Skills:</b></span> {", ".join(rank['missing_skills']) if rank['missing_skills'] else 'None'}
-                            </div>
-                            <div>
-                                <span style="color: #00e676;"><b>✓ Valid Licenses:</b></span> {", ".join(rank['matched_certs']) if rank['matched_certs'] else 'None'}<br/>
-                                <span style="color: #ff1744;"><b>✗ Missing Mandatory Licenses:</b></span> {", ".join(rank['missing_certs']) if rank['missing_certs'] else 'None'}
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 1rem; background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: 8px; border-left: 3px solid #ff8c00; font-size: 0.9rem; color: #cbd5e1; font-style: italic;">
-                            <b>🛡️ AI Matching Auditor Remark:</b> {rank['explanation']}
-                        </div>
-                    </div>
-                    """,
+                    f"""<div style="background: rgba(22, 26, 32, 0.85); border: 1px solid rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
+<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.8rem;">
+<div>
+<span style="font-size: 1.3rem; font-weight: 600; color: #ffffff;">#{idx+1} {rank['candidate_name']}</span>
+<span style="margin-left: 0.5rem;" class="badge {badge_class}">{hiring_status.upper()}</span>
+<span style="margin-left: 0.5rem;">{penalty_tag}</span>
+</div>
+<div style="font-size: 1.6rem; font-weight: bold; color: {score_color};">
+{overall}%
+</div>
+</div>
+<div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 0.95rem; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.8rem;">
+<div><b>Vector Score:</b> <br/><span style="color: #00b0ff; font-weight:bold;">{rank['vector_score']}%</span></div>
+<div><b>Technical Skills Score:</b> <br/><span style="color: #ffd700; font-weight:bold;">{rank['skill_score']}%</span></div>
+<div><b>Safety Credential Score:</b> <br/><span style="color: #00e676; font-weight:bold;">{rank['cert_score']}%</span></div>
+</div>
+<div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; font-size: 0.9rem;">
+<div>
+<span style="color: #00e676;"><b>✓ Matched Skills:</b></span> {", ".join(rank['matched_skills']) if rank['matched_skills'] else 'None'}<br/>
+<span style="color: #ff1744;"><b>✗ Missing Skills:</b></span> {", ".join(rank['missing_skills']) if rank['missing_skills'] else 'None'}
+</div>
+<div>
+<span style="color: #00e676;"><b>✓ Valid Licenses:</b></span> {", ".join(rank['matched_certs']) if rank['matched_certs'] else 'None'}<br/>
+<span style="color: #ff1744;"><b>✗ Missing Mandatory Licenses:</b></span> {", ".join(rank['missing_certs']) if rank['missing_certs'] else 'None'}
+</div>
+</div>
+<div style="margin-top: 1rem; background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: 8px; border-left: 3px solid #ff8c00; font-size: 0.9rem; color: #cbd5e1; font-style: italic;">
+<b>🛡️ AI Matching Auditor Remark:</b> {rank['explanation']}
+</div>
+</div>""",
                     unsafe_allow_html=True
                 )

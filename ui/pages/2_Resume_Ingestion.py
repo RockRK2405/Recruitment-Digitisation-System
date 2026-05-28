@@ -210,19 +210,17 @@ if uploaded_file is not None:
                             penalty = '<span class="badge badge-failed">⚠️ missing safety regulatory certificates</span>'
                             
                         st.markdown(
-                            f"""
-                            <div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 8px; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span style="font-size: 1.1rem; font-weight: 600; color: #ffffff;">💼 {r['job_title']}</span>
-                                    <span style="margin-left: 0.8rem;" class="badge {badge_class}">{r_status.upper()}</span>
-                                    {penalty}
-                                    <div style="font-size: 0.85rem; color: #8f9bb3; margin-top: 0.3rem;">Missing Certs: {", ".join(r['missing_certs']) if r['missing_certs'] else 'None'}</div>
-                                </div>
-                                <div style="font-size: 1.3rem; font-weight: bold; color: {r_color}; text-align:right;">
-                                    {r_score}% Match
-                                </div>
-                            </div>
-                            """,
+                            f"""<div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 8px; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center;">
+<div>
+<span style="font-size: 1.1rem; font-weight: 600; color: #ffffff;">💼 {r['job_title']}</span>
+<span style="margin-left: 0.8rem;" class="badge {badge_class}">{r_status.upper()}</span>
+{penalty}
+<div style="font-size: 0.85rem; color: #8f9bb3; margin-top: 0.3rem;">Missing Certs: {", ".join(r['missing_certs']) if r['missing_certs'] else 'None'}</div>
+</div>
+<div style="font-size: 1.3rem; font-weight: bold; color: {r_color}; text-align:right;">
+{r_score}% Match
+</div>
+</div>""",
                             unsafe_allow_html=True
                         )
                 else:

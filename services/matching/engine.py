@@ -126,10 +126,10 @@ class MatchingEngine:
         )
 
         # Calculate dynamic hiring status
-        if overall_score >= 40.0:
+        if overall_score >= 80.0:
             hiring_status = "Passed"
             status_color = "#00e676"  # Forest green
-        elif overall_score >= 30.0:
+        elif overall_score >= 60.0:
             hiring_status = "May Hire"
             status_color = "#ffd700"  # Warning gold
         else:
