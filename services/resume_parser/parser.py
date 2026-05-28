@@ -28,11 +28,29 @@ class ResumeParser:
             
         email = email_match.group(0).lower().strip() if email_match else ""
         
+        # Helper for strict regex-based word boundary keyword checking
+        def has_kw(kw: str) -> bool:
+            kw_clean = kw.lower().strip()
+            if not kw_clean:
+                return False
+            pattern = re.escape(kw_clean)
+            if kw_clean[0].isalnum():
+                pattern = r'\b' + pattern
+            if kw_clean[-1].isalnum():
+                pattern = pattern + r'\b'
+            try:
+                return bool(re.search(pattern, text.lower()))
+            except Exception:
+                return kw_clean in text.lower()
+        
         # 2. Extract Name (often first lines)
         lines = [line.strip() for line in text.split("\n") if line.strip()]
         name = "Unknown Worker"
         if lines:
-            for l in lines[:3]:
+            for l in lines[:5]:  # Scan up to 5 lines to skip generic title banners
+                l_clean = l.lower().strip()
+                if l_clean in ["resume", "curriculum vitae", "cv", "biodata", "profile", "contact info", "personal details", "name:", "name"]:
+                    continue
                 if "@" not in l and not any(char.isdigit() for char in l) and len(l) > 3:
                     name = l
                     break
@@ -42,21 +60,23 @@ class ResumeParser:
         experience = float(exp_match.group(1)) if exp_match else 1.0
         
         domain = "Industrial"
-        if any(w in text.lower() for w in ["mine", "mining", "coal", "dgms"]):
+        if any(has_kw(w) for w in ["mine", "mining", "coal", "dgms"]):
             domain = "Mining"
-        elif any(w in text.lower() for w in ["power", "boiler", "turbine", "thermal"]):
+        elif any(has_kw(w) for w in ["power", "boiler", "turbine", "thermal"]):
             domain = "Thermal Power Plant"
-        elif any(w in text.lower() for w in ["steel", "furnace", "foundry", "welder"]):
+        elif any(has_kw(w) for w in ["steel", "furnace", "foundry", "welder"]):
             domain = "Steel Plant"
-        elif any(w in text.lower() for w in ["warehouse", "forklift", "dumper", "driver"]):
+        elif any(has_kw(w) for w in ["warehouse", "forklift", "dumper", "driver"]):
             domain = "Logistics"
-        elif any(w in text.lower() for w in ["developer", "software", "coder", "aws", "react", "programming", "backend", "frontend"]):
+        elif any(has_kw(w) for w in ["ca", "icai", "accountant", "finance", "audit", "tax", "taxation", "tds", "gst", "chartered accountant"]):
+            domain = "Finance & Compliance"
+        elif any(has_kw(w) for w in ["developer", "software", "coder", "aws", "react", "programming", "backend", "frontend"]):
             domain = "Software Engineering"
             
         # 4. Extract Location
         location = "Dhanbad, Jharkhand" # Default
         for city in ["Dhanbad", "Ranchi", "Bhilai", "Jamshedpur", "Pune", "Mumbai", "Delhi", "Raipur", "Bangalore"]:
-            if city.lower() in text.lower():
+            if has_kw(city):
                 location = f"{city}, India"
                 break
                 
@@ -83,7 +103,7 @@ class ResumeParser:
             "ios": "Mobile App Development"
         }
         for kw, skill in keyword_skills.items():
-            if kw in text.lower():
+            if has_kw(kw):
                 skills.append(skill)
                 
         keyword_equip = {
@@ -98,7 +118,7 @@ class ResumeParser:
             "git": "GitHub Version Control"
         }
         for kw, eq in keyword_equip.items():
-            if kw in text.lower():
+            if has_kw(kw):
                 equipment.append(eq)
                 
         keyword_safety = {
@@ -110,13 +130,17 @@ class ResumeParser:
             "amazon": "AWS Certification"
         }
         for kw, sf in keyword_safety.items():
-            if kw in text.lower():
+            if has_kw(kw):
                 safety.append(sf)
                 
         # Create standard lists
         languages = ["Hindi"]
-        if "english" in text.lower():
+        if has_kw("english"):
             languages.append("English")
+        if has_kw("marathi"):
+            languages.append("Marathi")
+        if has_kw("telugu"):
+            languages.append("Telugu")
             
         # Create detailed certifications list
         certs = []
@@ -130,6 +154,15 @@ class ResumeParser:
                 )
             )
 
+        # Detect highest education
+        education = "Secondary School"
+        if has_kw("iti"):
+            education = "ITI Technical Pass"
+        elif has_kw("ca") or has_kw("icai") or has_kw("chartered accountant"):
+            education = "Chartered Accountant (CA)"
+        elif has_kw("b.com") or has_kw("bcom") or has_kw("degree") or has_kw("graduate"):
+            education = "University Graduate"
+
         return IndustrialResumeSchema(
             name=name,
             phone=phone,
@@ -141,7 +174,7 @@ class ResumeParser:
             equipment_handled=equipment if equipment else ["Hand Tools"],
             safety_certifications=safety,
             languages=languages,
-            education="ITI Technical Pass" if "iti" in text.lower() else "Secondary School",
+            education=education,
             availability="Immediate",
             previous_companies=["Industrial Contracting Inc."],
             certifications=certs
