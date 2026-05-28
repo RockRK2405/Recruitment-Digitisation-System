@@ -13,7 +13,7 @@ from config.logging_config import logger
 
 # Set premium Streamlit page configurations
 st.set_page_config(
-    page_title="Kshamata Industrial Workforce Intelligence",
+    page_title="Recruitment Digitisation System",
     page_icon="🛠️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -70,7 +70,7 @@ def fetch_summary_data() -> dict:
         db.close()
 
 # Page Header
-st.markdown('<div class="gradient-title">🛠️ KSHAMATA</div>', unsafe_allow_html=True)
+st.markdown('<div class="gradient-title">Recruitment Digitisation System</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">AI-Powered Industrial Workforce Recruitment & Resume Intelligence Platform</div>', unsafe_allow_html=True)
 
 # Fetch stats

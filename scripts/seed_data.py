@@ -15,12 +15,7 @@ def seed_job_descriptions():
     """Seeds typical industrial job descriptions if they do not exist."""
     db = SessionLocal()
     try:
-        existing_count = db.query(JobDescription).count()
-        if existing_count > 0:
-            logger.info("Job descriptions already seeded in the database.")
-            return
-
-        logger.info("Seeding industrial job descriptions...")
+        logger.info("Verifying and seeding industrial job descriptions...")
         
         jobs = [
             JobDescription(
@@ -30,6 +25,14 @@ def seed_job_descriptions():
                 required_certifications="DGMS Gas Testing Certificate, First Aid License",
                 location="Dhanbad, Jharkhand",
                 experience_years_required=3.0
+            ),
+            JobDescription(
+                title="Software Engineer",
+                description="Responsible for maintaing & Creation of Websites & Apps for the Plant",
+                required_skills="Frontend , Backend , AI/ML , Database Management, Mobile App Development",
+                required_certifications="AWS",
+                location="Mumbai, Maharashtra",
+                experience_years_required=0.0
             ),
             JobDescription(
                 title="Grade-A Boiler Attendant",
@@ -49,9 +52,16 @@ def seed_job_descriptions():
             )
         ]
         
-        db.add_all(jobs)
+        seeded_count = 0
+        for job_data in jobs:
+            existing = db.query(JobDescription).filter(JobDescription.title == job_data.title).first()
+            if not existing:
+                db.add(job_data)
+                seeded_count += 1
+                logger.info(f"Seeded new Job Description: {job_data.title}")
+                
         db.commit()
-        logger.info(f"Successfully seeded {len(jobs)} industrial job descriptions.")
+        logger.info(f"Job descriptions verified. Seeded {seeded_count} new postings.")
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to seed jobs: {str(e)}")

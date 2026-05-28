@@ -50,15 +50,17 @@ class ResumeParser:
             domain = "Steel Plant"
         elif any(w in text.lower() for w in ["warehouse", "forklift", "dumper", "driver"]):
             domain = "Logistics"
+        elif any(w in text.lower() for w in ["developer", "software", "coder", "aws", "react", "programming", "backend", "frontend"]):
+            domain = "Software Engineering"
             
         # 4. Extract Location
         location = "Dhanbad, Jharkhand" # Default
-        for city in ["Dhanbad", "Ranchi", "Bhilai", "Jamshedpur", "Pune", "Mumbai", "Delhi", "Raipur"]:
+        for city in ["Dhanbad", "Ranchi", "Bhilai", "Jamshedpur", "Pune", "Mumbai", "Delhi", "Raipur", "Bangalore"]:
             if city.lower() in text.lower():
                 location = f"{city}, India"
                 break
                 
-        # 5. Keywords mapping for blue-collar skills
+        # 5. Keywords mapping for skills (including software)
         skills = []
         equipment = []
         safety = []
@@ -69,7 +71,16 @@ class ResumeParser:
             "electrical": "Electrical Wiring",
             "rigging": "Scaffold Rigging",
             "drilling": "Blasting & Drilling",
-            "haulage": "Heavy Hauling"
+            "haulage": "Heavy Hauling",
+            "frontend": "Frontend",
+            "backend": "Backend",
+            "ai": "AI/ML",
+            "ml": "AI/ML",
+            "database": "Database Management",
+            "sql": "Database Management",
+            "mobile": "Mobile App Development",
+            "android": "Mobile App Development",
+            "ios": "Mobile App Development"
         }
         for kw, skill in keyword_skills.items():
             if kw in text.lower():
@@ -80,7 +91,11 @@ class ResumeParser:
             "crane": "Mobile Gantry Crane",
             "dumper": "CAT Dumper",
             "boiler": "Boiler Operations",
-            "lathe": "Metal Lathe Machine"
+            "lathe": "Metal Lathe Machine",
+            "computer": "Workstation Computer",
+            "laptop": "Workstation Computer",
+            "vscode": "VS Code IDE",
+            "git": "GitHub Version Control"
         }
         for kw, eq in keyword_equip.items():
             if kw in text.lower():
@@ -90,7 +105,9 @@ class ResumeParser:
             "dgms": "DGMS Safety Certificate",
             "osha": "OSHA Safety Standard",
             "first aid": "St John First Aid Cert",
-            "fire": "Fire Safety License"
+            "fire": "Fire Safety License",
+            "aws": "AWS Certification",
+            "amazon": "AWS Certification"
         }
         for kw, sf in keyword_safety.items():
             if kw in text.lower():
