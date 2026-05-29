@@ -12,10 +12,10 @@ from services.agents.orchestrator import AgentOrchestrator
 from config.settings import settings
 from config.logging_config import logger
 
-st.set_page_config(page_title="Resume Ingestion Portal | Kshamata", page_icon="📥", layout="wide")
+st.set_page_config(page_title="Resume Ingestion Portal", page_icon="", layout="wide")
 inject_premium_styles()
 
-st.markdown('<div class="gradient-title">📥 Resume Ingestion Portal</div>', unsafe_allow_html=True)
+st.markdown('<div class="gradient-title"> Resume Ingestion Portal</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Upload scanned PDFs or low-quality mobile photos of physical worker resumes</div>', unsafe_allow_html=True)
 
 # File Uploader Widget
@@ -26,10 +26,10 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.subheader(f"📄 Processing: {uploaded_file.name}")
+    st.subheader(f" Processing: {uploaded_file.name}")
     
     # Trigger processing on button click
-    if st.button("🚀 Run AI Recruiting Agents Ingestion"):
+    if st.button(" Run AI Recruiting Agents Ingestion"):
         with st.spinner("AI Recruiting Agent Team digesting upload (OCR + LLM Extraction + Credential Audit)..."):
             
             # Save file locally first
@@ -82,7 +82,7 @@ if uploaded_file is not None:
             # Display Ingestion Results on success
             if processed:
                 st.balloons()
-                st.success("✅ AI recruitment team completed ingestion successfully!")
+                st.success(" AI recruitment team completed ingestion successfully!")
                 
                 # Setup 3 sub-columns: Profile details, Credentials checks, WhatsApp alert preview
                 col_det, col_cert, col_sms = st.columns([4, 3, 3])
@@ -113,11 +113,11 @@ if uploaded_file is not None:
                     v_status = response_data["verification_status"]
                     
                     if v_status == "verified":
-                        st.markdown('<span class="badge badge-verified">✅ VERIFIED PROFILE</span>', unsafe_allow_html=True)
+                        st.markdown('<span class="badge badge-verified"> VERIFIED PROFILE</span>', unsafe_allow_html=True)
                     elif v_status == "flagged_with_anomalies":
-                        st.markdown('<span class="badge badge-warning">⚠️ FLAGGED WITH ANOMALIES</span>', unsafe_allow_html=True)
+                        st.markdown('<span class="badge badge-warning"> FLAGGED WITH ANOMALIES</span>', unsafe_allow_html=True)
                     else:
-                        st.markdown('<span class="badge badge-failed">❌ UNVERIFIED</span>', unsafe_allow_html=True)
+                        st.markdown('<span class="badge badge-failed"> UNVERIFIED</span>', unsafe_allow_html=True)
                         
                     st.write("")
                     st.write(f"**OCR Digitization Engine:** `{response_data['ocr_engine_used']}`")
@@ -135,12 +135,12 @@ if uploaded_file is not None:
                     # Anomalies flagged
                     anoms = response_data.get("anomalies_detected", [])
                     if anoms:
-                        st.write("🔴 **Flagged Anomalies:**")
+                        st.write(" **Flagged Anomalies:**")
                         for an in anoms:
                             st.markdown(f"<span style='color: #ffea00;'>• {an}</span>", unsafe_allow_html=True)
                             
                 with col_sms:
-                    st.markdown("### 💬 Localization WhatsApp Onboarding Alert")
+                    st.markdown("###  Localization WhatsApp Onboarding Alert")
                     st.info("The Notification Agent automatically drafted this onboarding template in the worker's native tongue:")
                     
                     sms_body = response_data.get("sms_whatsapp_alert")
@@ -159,7 +159,7 @@ if uploaded_file is not None:
 
                 # 4. Target Recommendations Section
                 st.markdown("---")
-                st.markdown("### 🎯 Targeted Job Openings Recommendations")
+                st.markdown("###  Targeted Job Openings Recommendations")
                 
                 # Fetch recommendations
                 recs = []
@@ -207,7 +207,7 @@ if uploaded_file is not None:
                             
                         penalty = ""
                         if r.get("has_compliance_penalty"):
-                            penalty = '<span class="badge badge-failed">⚠️ missing safety regulatory certificates</span>'
+                            penalty = '<span class="badge badge-failed"> missing safety regulatory certificates</span>'
                             
                         st.markdown(
                             f"""<div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 8px; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center;">

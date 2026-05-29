@@ -13,10 +13,10 @@ from database.models import JobDescription, Candidate
 from services.matching.engine import MatchingEngine
 from config.logging_config import logger
 
-st.set_page_config(page_title="Compliance & Job Matching | Kshamata", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="Compliance & Job Matching ", page_icon="", layout="wide")
 inject_premium_styles()
 
-st.markdown('<div class="gradient-title">⚙️ Compliance & Job Matching</div>', unsafe_allow_html=True)
+st.markdown('<div class="gradient-title"> Compliance & Job Matching</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Align candidates against Job Descriptions and audit mandatory safety certification compliance</div>', unsafe_allow_html=True)
 
 # Helper to fetch active Job Descriptions
@@ -97,7 +97,7 @@ else:
     
     # Display selected Job specs
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown(f"### 📋 Job Spec: {selected_job['title']}")
+    st.markdown(f"###  Job Spec: {selected_job['title']}")
     st.write(selected_job["description"])
     
     col_spec1, col_spec2 = st.columns(2)
@@ -108,7 +108,7 @@ else:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 2. Score Candidates and Rank
-    st.markdown("### 🏆 Scored Workforce Rankings")
+    st.markdown("###  Scored Workforce Rankings")
     
     rankings = []
     processed = False
@@ -155,7 +155,7 @@ else:
                 # Check for compliance penalty
                 penalty_tag = ""
                 if rank.get("has_compliance_penalty"):
-                    penalty_tag = '<span class="badge badge-failed">⚠️ 50% SAFETY COMPLIANCE PENALTY APPLIED</span>'
+                    penalty_tag = '<span class="badge badge-failed"> 50% SAFETY COMPLIANCE PENALTY APPLIED</span>'
                 
                 st.markdown(
                     f"""<div style="background: rgba(22, 26, 32, 0.85); border: 1px solid rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
@@ -185,7 +185,7 @@ else:
 </div>
 </div>
 <div style="margin-top: 1rem; background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: 8px; border-left: 3px solid #ff8c00; font-size: 0.9rem; color: #cbd5e1; font-style: italic;">
-<b>🛡️ AI Matching Auditor Remark:</b> {rank['explanation']}
+<b> AI Matching Auditor Remark:</b> {rank['explanation']}
 </div>
 </div>""",
                     unsafe_allow_html=True

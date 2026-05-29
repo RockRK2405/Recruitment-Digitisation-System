@@ -16,6 +16,17 @@ class MatchingEngine:
         return [item.strip().lower() for item in comma_str.split(",") if item.strip()]
 
     @classmethod
+    def _is_safety_certification(cls, cert: str) -> bool:
+        """Determines if a certification is a mandatory safety/regulatory credential."""
+        safety_keywords = [
+            "safety", "dgms", "osha", "boiler", "weld", "crane", "rigging", 
+            "gas", "first aid", "license", "permit", "operator", "competency", 
+            "blasting", "sirdar", "hazard", "attendant", "mining", "first class", "second class"
+        ]
+        cert_lower = cert.lower().strip()
+        return any(kw in cert_lower for kw in safety_keywords)
+
+    @classmethod
     def compute_match(cls, db: Session, candidate_id: int, job_id: int) -> dict:
         """
         Computes a detailed compliance-aware match score between a candidate and a job.
@@ -77,19 +88,20 @@ class MatchingEngine:
         # 4. Mandatory Safety Certification Check (Compliance matching)
         jd_certs = cls._parse_comma_list(job.required_certifications)
         
-        # Collect candidate's certifications
-        cand_certs = []
-        for c in candidate.certifications:
-            cand_certs.append(c.name.lower())
-            
+        # Collect candidate's certifications and skills for cross-referencing
+        cand_certs = [c.name.lower() for c in candidate.certifications]
+        candidate_skills = cls._parse_comma_list(resume.skills_list)
+        
         matched_certs = []
         missing_certs = []
         cert_score = 1.0 # Default if job has no certificates required
         
         if jd_certs:
             for cert in jd_certs:
-                # Rigorous check for license compliance
-                if any(cert in cc or cc in cert for cc in cand_certs):
+                # Check for certificate match in both certifications and skills list
+                cert_clean = cert.lower().strip()
+                if any(cert_clean in cc or cc in cert_clean for cc in cand_certs) or \
+                   any(cert_clean in cs or cs in cert_clean for cs in candidate_skills):
                     matched_certs.append(cert)
                 else:
                     missing_certs.append(cert)
@@ -104,12 +116,16 @@ class MatchingEngine:
         
         overall_score = w_vector + w_skill + w_cert
         
-        # Penalty block
+        # Penalty block: Only apply the 50% penalty if the job has required safety/compliance certifications
+        # and the candidate has zero matches on those safety-critical credentials.
         has_penalty = False
-        if jd_certs and not matched_certs:
-            # Strict penalty for zero safety compliance
-            overall_score = overall_score * 0.5
-            has_penalty = True
+        required_safety_certs = [cert for cert in jd_certs if cls._is_safety_certification(cert)]
+        if required_safety_certs:
+            matched_safety_certs = [cert for cert in matched_certs if cls._is_safety_certification(cert)]
+            if not matched_safety_certs:
+                # Strict penalty for zero safety compliance
+                overall_score = overall_score * 0.5
+                has_penalty = True
 
         overall_score = round(max(0.0, min(100.0, overall_score)), 1)
         

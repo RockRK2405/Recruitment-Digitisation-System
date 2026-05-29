@@ -12,10 +12,10 @@ from ui.components.styling import inject_premium_styles
 from database.connection import SessionLocal
 from database.models import Candidate, UploadedDocument, JobDescription, AuditLog, Certification, Resume
 
-st.set_page_config(page_title="Analytics Dashboard | Kshamata", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Analytics Dashboard", page_icon="", layout="wide")
 inject_premium_styles()
 
-st.markdown('<div class="gradient-title">📊 Analytics Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="gradient-title"> Analytics Dashboard</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Demographics, verification rates, and system audit trails</div>', unsafe_allow_html=True)
 
 # Fetch stats helper
@@ -63,7 +63,7 @@ else:
     
     with col_chart1:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader("👨‍🏭 Literacy & Digital Assistance Needs")
+        st.subheader(" Literacy & Digital Assistance Needs")
         
         # Prepare Literacy DataFrame
         norm_count = data["total_candidates"] - data["low_literacy_applicants"]
@@ -83,7 +83,7 @@ else:
         
     with col_chart2:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader("🏗️ Workforce Industry Domain Distribution")
+        st.subheader(" Workforce Industry Domain Distribution")
         
         # Prepare Domain DataFrame
         dom_dict = data.get("domains", {"Mining": 1})
@@ -104,7 +104,7 @@ else:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # 2. Detailed Audit logs list
-st.markdown("### 📋 Platform Administration Audit Trail")
+st.markdown("###  Platform Administration Audit Trail")
 st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
 db = SessionLocal()

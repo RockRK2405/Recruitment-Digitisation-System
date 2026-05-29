@@ -97,7 +97,7 @@ with col2:
         <div class="glass-card">
             <div style="font-size: 0.9rem; color: #8f9bb3; font-weight: 500;">PHYSICAL UPLOADS</div>
             <div class="metric-val">{stats["total_documents"]} Files</div>
-            <div style="font-size: 0.8rem; color: #ffd700; margin-top: 0.5rem;">📸 Mobile Photo OCR</div>
+            <div style="font-size: 0.8rem; color: #ffd700; margin-top: 0.5rem;"> Mobile Photo OCR</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -109,7 +109,7 @@ with col3:
         <div class="glass-card">
             <div style="font-size: 0.9rem; color: #8f9bb3; font-weight: 500;">LOW-LITERACY HELP</div>
             <div class="metric-val">{stats["low_literacy_percentage"]}%</div>
-            <div style="font-size: 0.8rem; color: #00b0ff; margin-top: 0.5rem;">👨‍🏭 Assistance Flagged ({stats["low_literacy_applicants"]})</div>
+            <div style="font-size: 0.8rem; color: #00b0ff; margin-top: 0.5rem;"> Assistance Flagged ({stats["low_literacy_applicants"]})</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -121,14 +121,14 @@ with col4:
         <div class="glass-card">
             <div style="font-size: 0.9rem; color: #8f9bb3; font-weight: 500;">LICENSE COMPLIANCE</div>
             <div class="metric-val">{stats["certification_verification_rate"]}%</div>
-            <div style="font-size: 0.8rem; color: #00e676; margin-top: 0.5rem;">🔒 DGMS/OSHA Audited</div>
+            <div style="font-size: 0.8rem; color: #00e676; margin-top: 0.5rem;"> DGMS/OSHA Audited</div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
 # Core Platform Showcase
-st.markdown("### 🌟 Platform Architecture & Capabilities")
+st.markdown("###  Platform Architecture & Capabilities")
 
 col_left, col_right = st.columns([3, 2])
 
@@ -136,10 +136,10 @@ with col_left:
     st.markdown(
         """
         <div class="glass-card" style="min-height: 380px;">
-            <h4 style="color: #ffd700; margin-top:0;">📋 Platform Workflow Overview</h4>
+            <h4 style="color: #ffd700; margin-top:0;"> Platform Workflow Overview</h4>
             <p style="color: #cbd5e1; line-height:1.6;">
                 Most industrial workers operating heavy mining shovels, steam boilers, or fabrication furnaces submit only 
-                <b>crumpled physical paper resumes</b> and are not digitally literate. <b>Kshamata</b> digitizes, 
+                <b>crumpled physical paper resumes</b> and are not digitally literate. <b></b> digitizes, 
                 interprets, and audits safety licenses for blue-collar placements:
             </p>
             <ul style="color: #cbd5e1; line-height: 1.8; padding-left: 1.2rem;">
@@ -158,7 +158,7 @@ with col_right:
     st.markdown(
         """
         <div class="glass-card" style="min-height: 380px;">
-            <h4 style="color: #ffd700; margin-top:0;">⚙️ Active Environment Stats</h4>
+            <h4 style="color: #ffd700; margin-top:0;"> Active Environment Stats</h4>
             <table style="width: 100%; border-collapse: collapse; color: #cbd5e1; line-height:2.2;">
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                     <td><b>Vector Index:</b></td>

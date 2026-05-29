@@ -12,10 +12,10 @@ from database.connection import SessionLocal
 from database.models import AgentLog
 from config.logging_config import logger
 
-st.set_page_config(page_title="AI Agent Flow Monitor | Kshamata", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="AI Agent Flow Monitor ", page_icon="", layout="wide")
 inject_premium_styles()
 
-st.markdown('<div class="gradient-title">🤖 AI Agent Flow Monitor</div>', unsafe_allow_html=True)
+st.markdown('<div class="gradient-title"> AI Agent Flow Monitor</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Track real-time step-by-step executions and state snapshots of the AI recruitment crew</div>', unsafe_allow_html=True)
 
 # Helper to fetch all unique run sessions logged
@@ -108,8 +108,8 @@ else:
                     f"""
                     <div class="pipeline-step" style="border-left: 5px solid {color_theme}; background: rgba(255,255,255,0.02); padding: 1.2rem; border-radius: 8px; margin-bottom: 0.8rem;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #8f9bb3; font-weight:bold; text-transform: uppercase;">
-                            <span>🤖 Agent: {agent}</span>
-                            <span>⏱️ Step #{index+1} - {step['timestamp']}</span>
+                            <span> Agent: {agent}</span>
+                            <span> Step #{index+1} - {step['timestamp']}</span>
                         </div>
                         <div style="margin-top: 0.5rem; font-size: 1rem; color: #ffffff; font-weight: 500;">
                             {message}
@@ -120,7 +120,7 @@ else:
                 )
                 
                 # Expandable State Snapshot display
-                with st.expander(f"📦 Step #{index+1} JSON State variables snapshot"):
+                with st.expander(f" Step #{index+1} JSON State variables snapshot"):
                     try:
                         snap_json = json.loads(step["state_snapshot"])
                         st.json(snap_json)

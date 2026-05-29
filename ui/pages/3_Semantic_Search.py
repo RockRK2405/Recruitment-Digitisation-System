@@ -13,10 +13,10 @@ from database.models import Candidate, Resume
 from services.embeddings.vector_store import VectorStoreService
 from config.logging_config import logger
 
-st.set_page_config(page_title="Conversational Semantic Search | Kshamata", page_icon="🔍", layout="wide")
+st.set_page_config(page_title="Conversational Semantic Search ", page_icon="🔍", layout="wide")
 inject_premium_styles()
 
-st.markdown('<div class="gradient-title">🔍 Conversational Semantic Search</div>', unsafe_allow_html=True)
+st.markdown('<div class="gradient-title"> Conversational Semantic Search</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Search the digitized workforce database using natural conversation queries</div>', unsafe_allow_html=True)
 
 # Search Bar Widget
@@ -102,13 +102,13 @@ if search_query:
                         </div>
                         
                         <div style="margin-top: 0.8rem; display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 0.9rem; color: #cbd5e1;">
-                            <div>📍 <b>Location:</b> {cand['location'] or 'N/A'}</div>
-                            <div>💼 <b>Domain:</b> {cand['primary_domain'] or 'N/A'}</div>
-                            <div>⏱️ <b>Experience:</b> {cand['experience_years']} Years</div>
+                            <div> <b>Location:</b> {cand['location'] or 'N/A'}</div>
+                            <div> <b>Domain:</b> {cand['primary_domain'] or 'N/A'}</div>
+                            <div> <b>Experience:</b> {cand['experience_years']} Years</div>
                         </div>
                         
                         <div style="margin-top: 0.6rem; font-size: 0.85rem; color: #8f9bb3;">
-                            <b>🛠️ Skills list:</b> {", ".join(cand['skills'])}
+                            <b> Skills list:</b> {", ".join(cand['skills'])}
                         </div>
                     </div>
                     """,

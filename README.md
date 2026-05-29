@@ -1,4 +1,4 @@
-# 🛠️ Kshamata: AI-Powered Industrial Workforce Recruitment Platform
+#  Kshamata: AI-Powered Industrial Workforce Recruitment Platform
 
 Kshamata ("Capability/Skill" in Hindi) is a production-grade, compliance-first, AI-driven workforce digitization and resume intelligence platform specifically engineered for low-literacy, high-noise industrial sectors:
 *   **Mining & Quarrying** (Coal, Minerals, Open-cast, Underground)
@@ -8,7 +8,7 @@ Kshamata ("Capability/Skill" in Hindi) is a production-grade, compliance-first, 
 
 ---
 
-## 🌟 Executive Summary & Problem Context
+##  Executive Summary & Problem Context
 
 In heavy industrial sectors, blue-collar and grey-collar contract laborers (e.g. heavy excavator operators, crane riggers, high-pressure welders, certified electricians) are crucial for operational safety and throughput. However:
 1.  **Low Digital Literacy:** Most workers do not possess digital profiles; they submit crumpled, wet, or handwritten physical resumes/hardcopies, often in regional languages (Hindi, Spanish, etc.).
@@ -19,7 +19,7 @@ In heavy industrial sectors, blue-collar and grey-collar contract laborers (e.g.
 
 ---
 
-## 🛠️ Architecture & Self-Healing Fallbacks
+##  Architecture & Self-Healing Fallbacks
 
 Kshamata is built for **resiliency** and is engineered with an enterprise-grade **Self-Healing Architecture** that guarantees full system execution even in restricted, offline, or non-dockerized local environments:
 
@@ -62,7 +62,7 @@ Kshamata is built for **resiliency** and is engineered with an enterprise-grade 
 
 ---
 
-## 🚀 Local Quickstart Guide
+##  Local Quickstart Guide
 
 You can run the entire platform locally with zero infrastructure configuration.
 
@@ -110,7 +110,7 @@ Visit `http://localhost:8000/docs` to view the beautiful interactive Swagger RES
 
 ---
 
-## 🐳 Production Docker Ingestion
+##  Production Docker Ingestion
 
 To deploy the entire stack in production (PostgreSQL + FastAPI + Streamlit):
 
@@ -139,7 +139,7 @@ Every upload is dispatched to an AI crew orchestrated sequentially:
 
 ---
 
-## 🔒 Compliance-First Matching Logic
+##  Compliance-First Matching Logic
 
 Industrial operations weight safety certifications heavily. Our matching algorithm computes scores (0 to 100) using a strict weighted average:
 *   **Semantic Alignment (40%):** Evaluates overall candidate experience vs job scope.
