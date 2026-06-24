@@ -11,10 +11,14 @@ from ui.components.styling import inject_premium_styles
 from database.connection import SessionLocal
 from database.models import Candidate, Resume
 from services.embeddings.vector_store import VectorStoreService
+from services.auth import require_role
 from config.logging_config import logger
 
 st.set_page_config(page_title="Conversational Semantic Search ", page_icon="🔍", layout="wide")
 inject_premium_styles()
+
+# Enforce role gate
+user = require_role(st, "viewer")
 
 st.markdown('<div class="gradient-title"> Conversational Semantic Search</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Search the digitized workforce database using natural conversation queries</div>', unsafe_allow_html=True)

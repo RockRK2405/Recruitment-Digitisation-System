@@ -10,10 +10,14 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from ui.components.styling import inject_premium_styles
 from database.connection import SessionLocal
 from database.models import AgentLog
+from services.auth import require_role
 from config.logging_config import logger
 
 st.set_page_config(page_title="AI Agent Flow Monitor ", page_icon="", layout="wide")
 inject_premium_styles()
+
+# Enforce role gate
+user = require_role(st, "viewer")
 
 st.markdown('<div class="gradient-title"> AI Agent Flow Monitor</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Track real-time step-by-step executions and state snapshots of the AI recruitment crew</div>', unsafe_allow_html=True)
@@ -101,8 +105,6 @@ else:
                     color_theme = "#d500f9" # Purple
                 elif "Verification" in agent:
                     color_theme = "#ff1744" if "anomaly" in message.lower() else "#00e676" # Red or Green
-                elif "Notification" in agent:
-                    color_theme = "#00e676" # Green WhatsApp
                 
                 st.markdown(
                     f"""

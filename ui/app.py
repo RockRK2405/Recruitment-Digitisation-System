@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from ui.components.styling import inject_premium_styles
 from database.connection import SessionLocal, is_sqlite_fallback
 from database.models import Candidate, UploadedDocument, JobDescription, Certification
+from services.auth import require_login
 from config.logging_config import logger
 
 # Set premium Streamlit page configurations
@@ -21,6 +22,9 @@ st.set_page_config(
 
 # Inject CSS styling overrides
 inject_premium_styles()
+
+# Enforce login gate
+user = require_login(st)
 
 def fetch_summary_data() -> dict:
     """Fetches summary metrics from FastAPI API with dynamic direct DB fallback."""
@@ -200,5 +204,8 @@ with st.sidebar:
         "2. **Resume Ingestion:** Upload and digitize resumes.\n"
         "3. **Semantic Search:** Look up workers using conversational queries.\n"
         "4. **Job Matching:** Check candidates ranked against job specs.\n"
-        "5. **Agent Monitor:** Trace AI team step-by-step logs in real-time."
+        "5. **Agent Monitor:** Trace AI team step-by-step logs in real-time.\n"
+        "6. **Recruiter Review:** Recruiter override decisions, custom candidate tags, and match quality feedback loop.\n"
+        "7. **Resume Chatbot:** Ask questions about ingested resumes using AI."
     )
+

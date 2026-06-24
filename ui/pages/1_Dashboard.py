@@ -11,9 +11,13 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from ui.components.styling import inject_premium_styles
 from database.connection import SessionLocal
 from database.models import Candidate, UploadedDocument, JobDescription, AuditLog, Certification, Resume
+from services.auth import require_role
 
 st.set_page_config(page_title="Analytics Dashboard", page_icon="", layout="wide")
 inject_premium_styles()
+
+# Enforce role gate
+user = require_role(st, "viewer")
 
 st.markdown('<div class="gradient-title"> Analytics Dashboard</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Demographics, verification rates, and system audit trails</div>', unsafe_allow_html=True)

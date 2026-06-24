@@ -11,12 +11,17 @@ from ui.components.styling import inject_premium_styles
 from database.connection import SessionLocal
 from database.models import JobDescription, Candidate
 from services.matching.engine import MatchingEngine
+from services.auth import require_role
+from services.resume_parser.parser import ResumeParser
 from config.logging_config import logger
 
-st.set_page_config(page_title="Compliance & Job Matching ", page_icon="", layout="wide")
+st.set_page_config(page_title="Compliance & Job Matching", page_icon="", layout="wide")
 inject_premium_styles()
 
-st.markdown('<div class="gradient-title"> Compliance & Job Matching</div>', unsafe_allow_html=True)
+# Enforce role gate
+user = require_role(st, "recruiter")
+
+st.markdown('<div class="gradient-title">Compliance & Job Matching</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Align candidates against Job Descriptions and audit mandatory safety certification compliance</div>', unsafe_allow_html=True)
 
 # Helper to fetch active Job Descriptions
@@ -49,40 +54,80 @@ def get_jobs_list() -> list[dict]:
     finally:
         db.close()
 
+# Initialize session state for JD builder fields if not present
+if "jd_title" not in st.session_state:
+    st.session_state.jd_title = ""
+if "jd_desc" not in st.session_state:
+    st.session_state.jd_desc = ""
+if "jd_skills" not in st.session_state:
+    st.session_state.jd_skills = ""
+if "jd_certs" not in st.session_state:
+    st.session_state.jd_certs = ""
+if "jd_loc" not in st.session_state:
+    st.session_state.jd_loc = "Jamshedpur, Jharkhand"
+if "jd_exp" not in st.session_state:
+    st.session_state.jd_exp = 2.0
+
 # 1. Option to Register a New Job Description
 with st.sidebar:
     st.markdown("<h3 style='color: #ffd700;'>Create Job Description</h3>", unsafe_allow_html=True)
-    with st.form("jd_creation_form"):
-        title = st.text_input("Job Title", placeholder="e.g. Heavy Crane Operator")
-        desc = st.text_area("Job Description", placeholder="Duties, responsibilities...")
-        skills = st.text_input("Required Skills (comma separated)", placeholder="rigging, crane control, signals")
-        certs = st.text_input("Mandatory Certifications (comma separated)", placeholder="Crane Safety License, First Aid")
-        loc = st.text_input("Job Location", value="Jamshedpur, Jharkhand")
-        exp_req = st.number_input("Experience Required (Years)", min_value=0.0, value=2.0, step=0.5)
-        
-        submitted = st.form_submit_button("📁 Register JD")
-        if submitted:
-            if not title or not desc:
-                st.error("Title and Description are required.")
-            else:
-                # Add to DB
-                db = SessionLocal()
+    
+    title = st.text_input("Job Title", value=st.session_state.jd_title, placeholder="e.g. Heavy Crane Operator")
+    desc = st.text_area("Job Description", value=st.session_state.jd_desc, placeholder="Duties, responsibilities...")
+    
+    if st.button("✨ AI Auto-Extract Requirements", use_container_width=True):
+        if not desc.strip():
+            st.warning("Please enter a job description first to extract requirements.")
+        else:
+            with st.spinner("Extracting requirements using AI..."):
                 try:
-                    jd = JobDescription(
-                        title=title,
-                        description=desc,
-                        required_skills=skills,
-                        required_certifications=certs,
-                        location=loc,
-                        experience_years_required=exp_req
-                    )
-                    db.add(jd)
-                    db.commit()
-                    st.success(f"Job Description '{title}' registered successfully!")
-                except Exception as ex:
-                    st.error(f"Failed to save JD: {str(ex)}")
-                finally:
-                    db.close()
+                    extracted = ResumeParser.parse_job_description(desc)
+                    st.session_state.jd_skills = ", ".join(extracted.get("required_skills", []))
+                    st.session_state.jd_certs = ", ".join(extracted.get("required_certifications", []))
+                    st.session_state.jd_exp = float(extracted.get("experience_years", 2.0))
+                    if extracted.get("location"):
+                        st.session_state.jd_loc = extracted.get("location")
+                    if extracted.get("title") and not title:
+                        st.session_state.jd_title = extracted.get("title")
+                    st.success("AI extraction completed! Review and adjust details below.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to auto-extract: {str(e)}")
+
+    skills = st.text_input("Required Skills (comma separated)", value=st.session_state.jd_skills, placeholder="rigging, crane control, signals")
+    certs = st.text_input("Mandatory Certifications (comma separated)", value=st.session_state.jd_certs, placeholder="Crane Safety License, First Aid")
+    loc = st.text_input("Job Location", value=st.session_state.jd_loc)
+    exp_req = st.number_input("Experience Required (Years)", min_value=0.0, value=st.session_state.jd_exp, step=0.5)
+    
+    if st.button("📁 Register JD", use_container_width=True):
+        if not title or not desc:
+            st.error("Title and Description are required.")
+        else:
+            # Add to DB
+            db = SessionLocal()
+            try:
+                jd = JobDescription(
+                    title=title,
+                    description=desc,
+                    required_skills=skills,
+                    required_certifications=certs,
+                    location=loc,
+                    experience_years_required=exp_req
+                )
+                db.add(jd)
+                db.commit()
+                st.success(f"Job Description '{title}' registered successfully!")
+                # Reset form session states
+                st.session_state.jd_title = ""
+                st.session_state.jd_desc = ""
+                st.session_state.jd_skills = ""
+                st.session_state.jd_certs = ""
+                st.session_state.jd_exp = 2.0
+                st.rerun()
+            except Exception as ex:
+                st.error(f"Failed to save JD: {str(ex)}")
+            finally:
+                db.close()
 
 # Load JDs
 jobs = get_jobs_list()
@@ -108,7 +153,7 @@ else:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 2. Score Candidates and Rank
-    st.markdown("###  Scored Workforce Rankings")
+    st.markdown("###  Workforce Rankings")
     
     rankings = []
     processed = False

@@ -30,3 +30,12 @@ pdfplumber>=0.11.0
 # Note: paddleocr requires extra platform packages (e.g. shapely, pyclipper).
 # Our engine is written dynamically to import and run paddleocr if present,
 # otherwise seamlessly falling back to pytesseract and digital parsing.
+
+# Multi-Modal Document Intelligence Additions
+easyocr>=1.7.1
+scikit-learn>=1.4.0
+Pillow>=10.2.0
+networkx>=3.2
+
+# AI Chatbot Framework
+langchain>=0.1.0

@@ -9,11 +9,15 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from ui.components.styling import inject_premium_styles
 from services.agents.orchestrator import AgentOrchestrator
+from services.auth import require_role
 from config.settings import settings
 from config.logging_config import logger
 
 st.set_page_config(page_title="Resume Ingestion Portal", page_icon="", layout="wide")
 inject_premium_styles()
+
+# Enforce role gate
+user = require_role(st, "recruiter")
 
 st.markdown('<div class="gradient-title"> Resume Ingestion Portal</div>', unsafe_allow_html=True)
 st.markdown('<div class="gradient-subtitle">Upload scanned PDFs or low-quality mobile photos of physical worker resumes</div>', unsafe_allow_html=True)
@@ -69,7 +73,6 @@ if uploaded_file is not None:
                             "parsed_profile": state.parsed_profile,
                             "verification_status": state.verification_results.get("identity_status"),
                             "anomalies_detected": state.verification_results.get("anomalies_detected", []),
-                            "sms_whatsapp_alert": state.notifications_prepared.get("message_body"),
                             "agent_audit_logs": [log["message"] for log in state.agent_logs]
                         }
                         processed = True
@@ -84,8 +87,8 @@ if uploaded_file is not None:
                 st.balloons()
                 st.success(" AI recruitment team completed ingestion successfully!")
                 
-                # Setup 3 sub-columns: Profile details, Credentials checks, WhatsApp alert preview
-                col_det, col_cert, col_sms = st.columns([4, 3, 3])
+                # Setup 2 sub-columns: Profile details, Credentials checks
+                col_det, col_cert = st.columns([3, 2])
                 
                 profile = response_data["parsed_profile"] or {}
                 
@@ -139,23 +142,7 @@ if uploaded_file is not None:
                         for an in anoms:
                             st.markdown(f"<span style='color: #ffea00;'>• {an}</span>", unsafe_allow_html=True)
                             
-                with col_sms:
-                    st.markdown("###  Localization WhatsApp Onboarding Alert")
-                    st.info("The Notification Agent automatically drafted this onboarding template in the worker's native tongue:")
-                    
-                    sms_body = response_data.get("sms_whatsapp_alert")
-                    if sms_body:
-                        st.markdown(
-                            f"""
-                            <div style="background: #075e54; color: #ffffff; padding: 1.2rem; border-radius: 12px; border-bottom-left-radius: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                                <small style="color: #25d366; font-weight:bold;">📲 WhatsApp Message Prep</small>
-                                <p style="margin-top: 0.5rem; font-size: 0.95rem; line-height: 1.5;">{sms_body}</p>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        st.write("*No localization message prepared.*")
+
 
                 # 4. Target Recommendations Section
                 st.markdown("---")

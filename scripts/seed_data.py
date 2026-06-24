@@ -5,10 +5,11 @@ from pathlib import Path
 # Adjust path to enable absolute imports from parent directory
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from database.connection import SessionLocal, Base, engine
+from database.connection import SessionLocal, Base, engine, is_sqlite_fallback
 from database.models import JobDescription, Candidate
 from services.agents.orchestrator import AgentOrchestrator
 from services.matching.engine import MatchingEngine
+from services.auth import seed_default_users
 from config.logging_config import logger
 
 def seed_job_descriptions():
@@ -123,7 +124,11 @@ def run_sample_agent_simulation():
             db.close()
 
 if __name__ == "__main__":
+    if is_sqlite_fallback:
+        logger.info("Dropping all tables to rebuild database with the new schema...")
+        Base.metadata.drop_all(bind=engine)
     # Ensure database is active
     Base.metadata.create_all(bind=engine)
+    seed_default_users()
     seed_job_descriptions()
     run_sample_agent_simulation()

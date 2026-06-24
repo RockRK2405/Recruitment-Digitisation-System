@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from config.logging_config import logger
+from services.ocr.image_utils import ImageUtils
 
 class ImagePreprocessor:
     """Preprocesses low-quality mobile uploads and scanned documents for high-accuracy OCR."""
@@ -44,6 +45,9 @@ class ImagePreprocessor:
             # Find all coordinates of foreground text pixels
             coords = np.column_stack(np.where(thresh > 0))
             
+            if len(coords) < 10:
+                return image
+            
             # Compute a bounding box containing all text points
             angle = cv2.minAreaRect(coords)[-1]
             
@@ -59,7 +63,7 @@ class ImagePreprocessor:
                 center = (w // 2, h // 2)
                 M = cv2.getRotationMatrix2D(center, angle, 1.0)
                 rotated = cv2.warpAffine(
-                    image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_RECLAIM
+                    image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
                 )
                 logger.info(f"De-skewed image by rotating {angle:.2f} degrees.")
                 return rotated
@@ -71,7 +75,10 @@ class ImagePreprocessor:
     @classmethod
     def preprocess(cls, image_path: str, save_path: str = None) -> np.ndarray:
         """
-        Executes complete cleanup pipeline: Load -> Grayscale -> Denoise -> De-skew -> Binarize.
+        Executes complete cleanup pipeline:
+        Load -> Perspective Correct -> Resolution Normalize -> Grayscale ->
+        CLAHE Contrast -> Denoise -> De-skew -> Sharpen -> Binarize.
+        
         Saves preprocessed image to save_path if specified.
         """
         logger.info(f"Preprocessing image file: {image_path}")
@@ -79,17 +86,29 @@ class ImagePreprocessor:
         # 1. Load image
         img = cls.read_image(image_path)
         
-        # 2. Convert to gray
+        # 2. Perspective correction (mobile camera angle shots)
+        img = ImageUtils.correct_perspective(img)
+        
+        # 3. Resolution normalization (standardize to 300 DPI equivalent)
+        img = ImageUtils.normalize_resolution(img, target_dpi=300, current_dpi=72)
+        
+        # 4. Convert to grayscale
         gray = cls.to_grayscale(img)
         
-        # 3. Denoise (removes crumpled spots, shadow stains)
-        denoised = cls.reduce_noise(gray)
+        # 5. CLAHE contrast enhancement (faded text, poor lighting)
+        enhanced = ImageUtils.enhance_contrast_clahe(gray, clip_limit=2.0, tile_size=8)
         
-        # 4. De-skew
+        # 6. Denoise (removes crumpled spots, shadow stains)
+        denoised = cls.reduce_noise(enhanced)
+        
+        # 7. De-skew
         de_skewed = cls.de_skew(denoised)
         
-        # 5. High-contrast adaptive binarization (yields clean black & white text sheet)
-        final_processed = cls.adaptive_binarize(de_skewed)
+        # 8. Sharpen (blurry mobile captures)
+        sharpened = ImageUtils.sharpen_image(de_skewed, strength=1.0)
+        
+        # 9. High-contrast adaptive binarization (yields clean black & white text sheet)
+        final_processed = cls.adaptive_binarize(sharpened)
         
         # Save output for review/verification
         if save_path:
@@ -97,3 +116,35 @@ class ImagePreprocessor:
             logger.info(f"Preprocessed image output saved at: {save_path}")
             
         return final_processed
+
+    @classmethod
+    def preprocess_for_vision(cls, image_path: str, save_path: str = None) -> np.ndarray:
+        """
+        Lighter preprocessing pipeline optimized for Vision-Language Models.
+        VLMs work better with natural-looking images (not binarized).
+        
+        Pipeline: Load -> Perspective Correct -> Resolution Normalize -> 
+                  CLAHE Contrast -> Light Denoise -> Sharpen
+        """
+        logger.info(f"Preprocessing image for VLM analysis: {image_path}")
+        
+        # 1. Load image (keep in color for VLM)
+        img = cls.read_image(image_path)
+        
+        # 2. Perspective correction
+        img = ImageUtils.correct_perspective(img)
+        
+        # 3. Resolution normalization
+        img = ImageUtils.normalize_resolution(img, target_dpi=300, current_dpi=72)
+        
+        # 4. Light denoising (preserve color information)
+        denoised = cv2.bilateralFilter(img, 5, 50, 50)
+        
+        # 5. Light sharpening
+        sharpened = ImageUtils.sharpen_image(denoised, strength=0.5)
+        
+        if save_path:
+            cv2.imwrite(save_path, sharpened)
+            logger.info(f"VLM-preprocessed image saved at: {save_path}")
+        
+        return sharpened

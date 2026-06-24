@@ -37,8 +37,16 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash"
     
     # Local Ollama Settings
-    OLLAMA_MODEL: str = "gemma4:e4b"
+    OLLAMA_MODEL: str = "qwen3.6:latest"
     OLLAMA_URL: str = "http://localhost:11434/api/generate"
+    OLLAMA_VISION_MODEL: str = "qwen3.6:latest"
+    OLLAMA_VISION_URL: str = "http://localhost:11434/api/generate"
+    
+    # OCR & Document Intelligence Configurations
+    EASYOCR_LANGUAGES: list = ["en", "hi"]
+    VISION_ENABLED: bool = True
+    CLASSIFIER_CONFIDENCE_THRESHOLD: float = 0.6
+    FIELD_CONFIDENCE_THRESHOLD: float = 0.5
     
     # Logger
     LOG_LEVEL: str = "INFO"

@@ -1,0 +1,23 @@
+{
+  "name": "workforceai-recruitment-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise Recruitment Intelligence Platform",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:gateway\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:gateway": "cd api-gateway && npm run dev",
+    "build": "npm run build:frontend && npm run build:gateway",
+    "build:frontend": "cd frontend && npm run build",
+    "build:gateway": "cd api-gateway && npm run build",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up -d",
+    "docker:prod": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "setup": "npm run docker:dev && cd frontend && npm install && cd ../api-gateway && npm install",
+    "lint": "cd frontend && npm run lint && cd ../api-gateway && npm run lint",
+    "typecheck": "cd frontend && npm run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

@@ -48,6 +48,7 @@ def list_job_descriptions(db: Session = Depends(get_db)):
         {
             "id": j.id,
             "title": j.title,
+            "description": j.description,
             "required_skills": [s.strip() for s in (j.required_skills or "").split(",") if s.strip()],
             "required_certifications": [c.strip() for c in (j.required_certifications or "").split(",") if c.strip()],
             "location": j.location,

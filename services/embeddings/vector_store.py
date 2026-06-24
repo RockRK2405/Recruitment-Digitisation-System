@@ -93,6 +93,16 @@ class VectorStoreService:
         return _COLLECTION
 
     @classmethod
+    def add_to_collection(cls, doc_id: str, text: str, metadata: dict):
+        """Wrapper method for indexing candidate data, alias to index_resume."""
+        try:
+            resume_id = int(doc_id)
+        except ValueError:
+            # Fallback to hash if doc_id is not integer-like
+            resume_id = hash(doc_id) % 1000000
+        cls.index_resume(resume_id, text, metadata)
+
+    @classmethod
     def index_resume(cls, resume_id: int, text: str, metadata: dict):
         """Generates embeddings and index the candidate's parsed text."""
         # Clean text

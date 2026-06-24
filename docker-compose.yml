@@ -1,65 +1,115 @@
-version: '3.8'
-
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: recruitment_postgres_db
-    restart: always
+  postgres:
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_secure_pwd_2026
       POSTGRES_DB: workforce_recruitment
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d workforce_recruitment"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  api:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ai-service:
     build:
-      context: .
-      dockerfile: Dockerfile.api
-    container_name: recruitment_fastapi_server
-    restart: always
-    environment:
-      - ENV=production
-      - DATABASE_URL=postgresql://postgres:postgres_secure_pwd_2026@db:5432/workforce_recruitment
-      - POSTGRES_HOST=db
-      - CHROMA_DB_PATH=/app/data/chromadb
-      - EMBEDDING_MODEL_NAME=intfloat/multilingual-e5-base
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=gemini-2.5-flash
-      - LOG_LEVEL=INFO
+      context: ./ai-service
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      - ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workforce_recruitment
+      - REDIS_URL=redis://redis:6379/0
+      - LLM_PROVIDER=ollama
+      - OLLAMA_URL=http://ollama:11434/api/generate
+      - OLLAMA_MODEL=qwen3.6:latest
+      - CHROMA_DB_PATH=/data/chromadb
+      - ENABLE_GPU=false
     volumes:
-      - chroma_data:/app/data/chromadb
-      - shared_uploads:/app/data/uploads
+      - ai_data:/data
+      - shared_uploads:/app/uploads
     depends_on:
-      db:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=workforce_recruitment
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AI_SERVICE_URL=http://ai-service:8000
+      - JWT_SECRET=${JWT_SECRET:-workforce-ai-jwt-secret-prod}
+      - CORS_ORIGIN=http://localhost:3000
+    volumes:
+      - shared_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
-  ui:
+  frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.ui
-    container_name: recruitment_streamlit_dashboard
-    restart: always
-    environment:
-      - API_URL=http://api:8000
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
-      - "8501:8501"
-    volumes:
-      - shared_uploads:/app/data/uploads
+      - "3000:80"
     depends_on:
-      - api
+      - api-gateway
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          memory: 8G
+    profiles:
+      - ai
 
 volumes:
   postgres_data:
-  chroma_data:
+  redis_data:
+  ai_data:
+  ollama_data:
   shared_uploads:

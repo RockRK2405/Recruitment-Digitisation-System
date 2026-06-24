@@ -1,26 +1,54 @@
-# Python compiled files and cache
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+frontend/dist/
+api-gateway/dist/
+ai-service/__pycache__/
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.venv/
+*.so
+.Python
 env/
 venv/
-ENV/
+.venv/
 
-# Local environmental config with credentials
+# Environment
 .env
+.env.local
+.env.*.local
 
-# SQLite local fallback DB & persistent ChromaDB directory
-data/local_fallback.db
-data/chromadb/
-
-# Temporary resume uploads (Except the platform blueprint graphic!)
-data/uploads/*
-!data/uploads/kshamata_platform_blueprint.png
-
-# Operating system files
-.DS_Store
-Thumbs.db
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/chromadb/
+data/local_fallback.db
+data/uploads/
+uploads/
+*.sqlite
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+.coverage

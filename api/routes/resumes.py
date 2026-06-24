@@ -62,7 +62,6 @@ async def upload_resume(file: UploadFile = File(...)):
             "parsed_profile": state.parsed_profile,
             "verification_status": state.verification_results.get("identity_status"),
             "anomalies_detected": state.verification_results.get("anomalies_detected", []),
-            "sms_whatsapp_alert": state.notifications_prepared.get("message_body"),
             "agent_audit_logs": [f"[{log['agent']}] - {log['message']}" for log in state.agent_logs]
         }
     except Exception as e:
