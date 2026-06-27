@@ -14,7 +14,8 @@ export function createMatchingRouter(pool: Pool) {
          JOIN candidates c ON c.id = m.candidate_id
          LEFT JOIN resumes r ON r.candidate_id = c.id
          WHERE m.job_id = $1
-         ORDER BY m.overall_score DESC`,
+         ORDER BY m.overall_score DESC
+         LIMIT 50`,
         [req.params.jobId]
       )
 
@@ -34,7 +35,7 @@ export function createMatchingRouter(pool: Pool) {
           email: row.email,
           location: row.location,
           status: row.status,
-          primaryDomain: row.primary_domain,
+          primaryDomain: row.primary_domain || row.r_primary_domain,
           experienceYears: row.experience_years,
           skills: row.skills_list || [],
         },
@@ -103,7 +104,7 @@ export function createMatchingRouter(pool: Pool) {
         `SELECT c.*, r.experience_years, r.skills_list, r.primary_domain
          FROM candidates c
          LEFT JOIN resumes r ON r.candidate_id = c.id
-         WHERE r.raw_text ILIKE $1 OR c.name ILIKE $1 OR EXISTS (SELECT 1 FROM unnest(r.skills_list) s WHERE s ILIKE $1)
+         WHERE r.raw_text ILIKE $1 OR c.name ILIKE $1 OR r.skills_list ILIKE $1 OR r.primary_domain ILIKE $1
          LIMIT 20`,
         [`%${query}%`]
       )

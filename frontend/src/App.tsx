@@ -13,6 +13,7 @@ import { ResumesPage } from '@/pages/resumes'
 import { MatchingPage } from '@/pages/matching'
 import { AnalyticsPage } from '@/pages/analytics'
 import { AgentPage } from '@/pages/agent'
+import { SettingsPage } from '@/pages/settings'
 
 export default function App() {
   const { setAuth, logout, setLoading, isAuthenticated } = useAuthStore()
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="matching" element={<MatchingPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="agent" element={<AgentPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
     </Routes>
