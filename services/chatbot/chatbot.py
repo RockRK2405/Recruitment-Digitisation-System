@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from config.settings import settings
 from config.logging_config import logger
+from services.llm.provider import call_chat_llm as _call_chat_llm
 from ui.components.styling import inject_premium_styles
 
 def get_candidate_context():
@@ -143,59 +144,8 @@ def get_detailed_job_context(prompt: str) -> str:
         db.close()
 
 def call_chat_llm(messages: list) -> str:
-    """Unified Chat LLM call helper supporting Ollama and Gemini fallback."""
-    provider = (settings.LLM_PROVIDER or "ollama").lower()
-    
-    if provider == "ollama":
-        try:
-            chat_url = settings.OLLAMA_URL.replace("/api/generate", "/api/chat")
-            payload = {
-                "model": settings.OLLAMA_MODEL,
-                "messages": messages,
-                "stream": False
-            }
-            logger.info(f"Calling Ollama Chat API at: {chat_url} for model: {settings.OLLAMA_MODEL}")
-            # Increased timeout to 300.0 seconds to prevent read timeouts on slower devices
-            response = requests.post(chat_url, json=payload, timeout=300.0)
-            if response.status_code == 200:
-                result = response.json()
-                return result.get("message", {}).get("content", "").strip()
-            else:
-                logger.error(f"Ollama returned non-200 status code: {response.status_code}, detail: {response.text}")
-        except Exception as e:
-            logger.warning(f"Ollama Chat call failed: {str(e)}")
-            
-    # Gemini fallback
-    api_key = settings.GEMINI_API_KEY or ""
-    if api_key and "YOUR_GEMINI_API" not in api_key:
-        try:
-            from google import genai
-            from google.genai import types
-            
-            prompt = ""
-            for msg in messages:
-                role = msg["role"]
-                content = msg["content"]
-                if role == "system":
-                    prompt += f"System: {content}\n\n"
-                elif role == "user":
-                    prompt += f"User: {content}\n"
-                elif role == "assistant":
-                    prompt += f"Assistant: {content}\n"
-            prompt += "Assistant:"
-            
-            logger.info("Falling back to Gemini model for Chatbot...")
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.3)
-            )
-            return response.text.strip()
-        except Exception as e:
-            logger.warning(f"Gemini fallback chat call failed: {str(e)}")
-            
-    return "I am having trouble connecting to the local AI model (Ollama) or the backup AI service. Please ensure Ollama is running and has the model loaded."
+    """Delegates to the central LLM provider abstraction."""
+    return _call_chat_llm(messages)
 
 def chatbot_interface():
     # Inject styling

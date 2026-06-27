@@ -172,5 +172,29 @@ export function createCandidatesRouter(pool: Pool) {
     }
   })
 
+  router.patch('/:id/status', authenticate, async (req: AuthRequest, res: Response) => {
+    const VALID_STATUSES = ['new', 'screening', 'shortlisted', 'interview', 'offered', 'hired', 'rejected']
+    try {
+      const { status } = req.body
+      if (!status || !VALID_STATUSES.includes(status)) {
+        return res.status(400).json({
+          message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+          code: 'INVALID_STATUS',
+        })
+      }
+      const result = await pool.query(
+        'UPDATE candidates SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, status',
+        [status, req.params.id]
+      )
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Candidate not found', code: 'NOT_FOUND' })
+      }
+      res.json({ id: result.rows[0].id, name: result.rows[0].name, status: result.rows[0].status })
+    } catch (error) {
+      console.error('Update candidate status error:', error)
+      res.status(500).json({ message: 'Failed to update candidate status', code: 'UPDATE_FAILED' })
+    }
+  })
+
   return router
 }

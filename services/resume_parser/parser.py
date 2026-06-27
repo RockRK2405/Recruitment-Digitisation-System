@@ -10,10 +10,10 @@ Supports:
 
 import json
 import re
-import requests
 from typing import Optional, List
 from config.settings import settings
 from config.logging_config import logger
+from services.llm.provider import call_llm
 from services.resume_parser.schema import (
     IndustrialResumeSchema, ParsedCertification, IndustrialDetails,
     CertificateExtractionResult, ExperienceLetterResult
@@ -292,48 +292,8 @@ class ResumeParser:
     # ─────────────────────────────────────────────
     @classmethod
     def _call_llm(cls, prompt: str, expect_json: bool = True) -> Optional[str]:
-        """Unified LLM call helper (Ollama or Gemini)."""
-        provider = (settings.LLM_PROVIDER or "gemini").lower()
-        
-        if provider == "ollama":
-            try:
-                payload = {
-                    "model": settings.OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False
-                }
-                if expect_json:
-                    payload["format"] = "json"
-                    
-                response = requests.post(settings.OLLAMA_URL, json=payload, timeout=300.0)
-                if response.status_code == 200:
-                    return response.json().get("response", "").strip()
-            except Exception as e:
-                logger.warning(f"Ollama call failed: {str(e)}")
-        
-        # Gemini fallback
-        api_key = settings.GEMINI_API_KEY or ""
-        if api_key and "YOUR_GEMINI_API" not in api_key:
-            try:
-                from google import genai
-                from google.genai import types
-                client = genai.Client(api_key=api_key)
-                config = types.GenerateContentConfig(temperature=0.1)
-                if expect_json:
-                    config = types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        temperature=0.1
-                    )
-                response = client.models.generate_content(
-                    model=settings.GEMINI_MODEL,
-                    contents=prompt,
-                    config=config
-                )
-                return response.text.strip()
-            except Exception as e:
-                logger.warning(f"Gemini call failed: {str(e)}")
-        
-        return None
+        """Delegates to the central LLM provider abstraction."""
+        return call_llm(prompt, expect_json=expect_json)
 
     @classmethod
     def parse_resume(cls, resume_text: str) -> IndustrialResumeSchema:

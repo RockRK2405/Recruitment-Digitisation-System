@@ -1,8 +1,11 @@
 import { Router, Response } from 'express'
 import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { Pool } from 'pg'
+import axios from 'axios'
+import { config } from '../config/index.js'
 
 const router = Router()
+const aiClient = axios.create({ baseURL: config.aiService.url, timeout: 60000 })
 
 export function createJobsRouter(pool: Pool) {
   router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
@@ -80,7 +83,7 @@ export function createJobsRouter(pool: Pool) {
         [title, description, requiredSkills || [], requiredCertifications || [], location, experienceYearsRequired, educationRequired, industry]
       )
       const row = result.rows[0]
-      res.status(201).json({
+      const jobResponse = {
         id: row.id,
         title: row.title,
         description: row.description,
@@ -93,6 +96,12 @@ export function createJobsRouter(pool: Pool) {
         status: row.status,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+      }
+      res.status(201).json(jobResponse)
+
+      // Fire-and-forget: trigger AI match scoring for all candidates vs this new job
+      aiClient.post('/api/match/trigger', { job_id: row.id }).catch((err) => {
+        console.warn(`Auto-match trigger for job ${row.id} failed (non-fatal): ${err.message}`)
       })
     } catch (error) {
       console.error('Create job error:', error)
