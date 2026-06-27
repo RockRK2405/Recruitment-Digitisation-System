@@ -26,10 +26,11 @@ async def upload_resume(file: UploadFile = File(...)):
     """
     # 1. Save uploaded file to local disk
     file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in [".pdf", ".png", ".jpg", ".jpeg", ".heic"]:
+    allowed_exts = {".pdf", ".png", ".jpg", ".jpeg", ".heic", ".tiff", ".tif", ".bmp", ".webp", ".doc", ".docx"}
+    if file_ext not in allowed_exts:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format '{file_ext}'. Please upload an image (PNG, JPG, HEIC) or PDF."
+            detail=f"Unsupported file format '{file_ext}'. Supported: PDF, PNG, JPG, TIFF, BMP, DOC, DOCX."
         )
         
     os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -127,12 +128,15 @@ def get_candidate_profile(candidate_id: int, db: Session = Depends(get_db)):
         "created_at": candidate.created_at,
         "resume": {
             "experience_years": resume.experience_years if resume else 0.0,
+            "skills_list": resume.skills_list if resume else "",
             "skills": [s.strip() for s in (resume.skills_list or "").split(",") if s.strip()] if resume else [],
             "primary_domain": resume.primary_domain if resume else None,
             "equipment_handled": [e.strip() for e in (resume.equipment_handled or "").split(",") if e.strip()] if resume else [],
             "languages": [l.strip() for l in (resume.languages or "").split(",") if l.strip()] if resume else [],
             "education": resume.education if resume else None,
-            "availability": resume.availability if resume else None
+            "availability": resume.availability if resume else None,
+            "notice_period": resume.notice_period if resume else None,
+            "expected_salary": resume.expected_salary if resume else None,
         },
         "certifications": certs
     }

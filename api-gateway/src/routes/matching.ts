@@ -1,8 +1,11 @@
 import { Router, Response } from 'express'
 import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { Pool } from 'pg'
+import axios from 'axios'
+import { config } from '../config/index.js'
 
 const router = Router()
+const aiClient = axios.create({ baseURL: config.aiService.url, timeout: 30000 })
 
 export function createMatchingRouter(pool: Pool) {
   router.get('/rank/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
@@ -99,21 +102,42 @@ export function createMatchingRouter(pool: Pool) {
 
   router.post('/semantic', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-      const { query } = req.body
+      const { query, limit = 10 } = req.body
+      if (!query) return res.status(400).json({ message: 'query is required', code: 'MISSING_QUERY' })
+
+      // Try Python vector search first for semantic accuracy
+      try {
+        const aiRes = await aiClient.post('/api/match/semantic', { query, limit })
+        const candidates = aiRes.data?.candidates || aiRes.data || []
+        return res.json(candidates.map((c: Record<string, unknown>) => ({
+          id: c.candidate_id || c.id,
+          name: c.name,
+          experienceYears: c.experience_years,
+          skills: Array.isArray(c.skills) ? c.skills : [],
+          primaryDomain: c.primary_domain,
+          location: c.location,
+          status: c.status,
+          vectorScore: c.vector_similarity_score,
+        })))
+      } catch {
+        // Fall back to DB ILIKE search
+      }
+
       const result = await pool.query(
-        `SELECT c.*, r.experience_years, r.skills_list, r.primary_domain
+        `SELECT c.id, c.name, c.status, c.location, r.experience_years, r.skills_list, r.primary_domain
          FROM candidates c
          LEFT JOIN resumes r ON r.candidate_id = c.id
          WHERE r.raw_text ILIKE $1 OR c.name ILIKE $1 OR r.skills_list ILIKE $1 OR r.primary_domain ILIKE $1
-         LIMIT 20`,
-        [`%${query}%`]
+         LIMIT $2`,
+        [`%${query}%`, limit]
       )
       res.json(result.rows.map((row) => ({
         id: row.id,
         name: row.name,
         experienceYears: row.experience_years,
-        skills: row.skills_list || [],
+        skills: row.skills_list ? row.skills_list.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
         primaryDomain: row.primary_domain,
+        location: row.location,
         status: row.status,
       })))
     } catch (error) {
