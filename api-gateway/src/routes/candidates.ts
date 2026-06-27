@@ -19,7 +19,7 @@ export function createCandidatesRouter(pool: Pool) {
       let paramIndex = 1
 
       if (search) {
-        whereClause += ` AND (c.name ILIKE $${paramIndex} OR c.email ILIKE $${paramIndex} OR EXISTS (SELECT 1 FROM unnest(r.skills_list) s WHERE s ILIKE $${paramIndex}))`
+        whereClause += ` AND (c.name ILIKE $${paramIndex} OR c.email ILIKE $${paramIndex} OR r.skills_list ILIKE $${paramIndex} OR r.primary_domain ILIKE $${paramIndex})`
         params.push(`%${search}%`)
         paramIndex++
       }
@@ -29,7 +29,7 @@ export function createCandidatesRouter(pool: Pool) {
         paramIndex++
       }
       if (domain) {
-        whereClause += ` AND c.primary_domain = $${paramIndex}`
+        whereClause += ` AND r.primary_domain = $${paramIndex}`
         params.push(domain)
         paramIndex++
       }

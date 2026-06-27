@@ -63,7 +63,7 @@ async function main() {
   app.use('/api/analytics', createAnalyticsRouter(pool))
   app.use('/api/agent', createAgentRouter(pool))
   app.use('/api/documents', createDocumentsRouter(pool))
-  app.use('/api/vision', createAiProxyRouter())
+  app.use('/api', createAiProxyRouter())
 
   app.use(notFoundHandler)
   app.use(errorHandler)

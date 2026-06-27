@@ -7,7 +7,7 @@ from config.logging_config import logger
 from database.connection import Base, engine
 
 # Import Routers
-from api.routes import resumes, jobs, match, analytics, documents, vision, review
+from api.routes import resumes, jobs, match, analytics, documents, vision, review, agent
 
 # Initialize FastAPI App with Swagger description
 app = FastAPI(
@@ -68,3 +68,4 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics &
 app.include_router(documents.router, prefix="/api/documents", tags=["Multi-Modal Documents Ingestion"])
 app.include_router(vision.router, prefix="/api/vision", tags=["Vision-Language Model (VLM)"])
 app.include_router(review.router, prefix="/api/review", tags=["Recruiter Review & Feedback"])
+app.include_router(agent.router, prefix="/api/agent", tags=["AI HR Agent & Chat"])
