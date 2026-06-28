@@ -9,23 +9,29 @@ ENV PYTHONUNBUFFERED=1 \
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for OpenCV, Tesseract OCR, and general utilities
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies
+# libgl1 replaces libgl1-mesa-glx on Debian Bookworm+
+# tesseract-ocr-hin replaced by tesseract-ocr-script-deva on some mirrors
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
     build-essential \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
     tesseract-ocr \
     tesseract-ocr-eng \
-    tesseract-ocr-hin \
     poppler-utils \
+    curl \
+    && apt-get install -y --no-install-recommends tesseract-ocr-hin 2>/dev/null || true \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download EasyOCR English and Hindi models
-RUN python -c "import easyocr; reader = easyocr.Reader(['en', 'hi'])"
+# Pre-download EasyOCR models (English; Hindi optional)
+RUN python -c "import easyocr; easyocr.Reader(['en'])" || true
 
 # Copy source code
 COPY . .
