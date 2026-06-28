@@ -1,10 +1,7 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useAuthStore } from '@/lib/store'
-import { authApi } from '@/lib/api'
 import { AppLayout } from '@/components/layout/app-layout'
 import { ProtectedRoute } from '@/components/shared/protected-route'
-import { LoginPage } from '@/pages/login'
 
 const DashboardPage = lazy(() => import('@/pages/dashboard').then(m => ({ default: m.DashboardPage })))
 const CandidatesPage = lazy(() => import('@/pages/candidates').then(m => ({ default: m.CandidatesPage })))
@@ -25,24 +22,8 @@ function PageLoader() {
 }
 
 export default function App() {
-  const { setAuth, logout, setLoading, isAuthenticated } = useAuthStore()
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      setLoading(false)
-      return
-    }
-    authApi.me()
-      .then((res) => setAuth(res.data, token))
-      .catch(() => {
-        logout()
-      })
-  }, [])
-
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
       <Route
         path="/"
         element={
@@ -62,7 +43,7 @@ export default function App() {
         <Route path="agent" element={<Suspense fallback={<PageLoader />}><AgentPage /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
       </Route>
-      <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

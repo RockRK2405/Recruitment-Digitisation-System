@@ -1,4 +1,4 @@
-import { useAuthStore, useThemeStore } from '@/lib/store'
+import { useThemeStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -10,27 +10,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { getInitials } from '@/lib/utils'
-import {
-  Bell,
-  Moon,
-  Sun,
-  Search,
-  Settings,
-  LogOut,
-  User,
-} from 'lucide-react'
+import { Bell, Moon, Sun, Search, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export function Header() {
-  const { user, logout } = useAuthStore()
   const { isDark, toggle } = useThemeStore()
   const navigate = useNavigate()
-
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-xl px-6">
@@ -60,28 +45,21 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full">
               <Avatar className="h-9 w-9">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                  {user ? getInitials(user.displayName) : 'U'}
-                </AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary text-xs">HR</AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>{user?.displayName}</span>
-                <span className="text-xs text-muted-foreground capitalize">{user?.role}</span>
+                <span>HR Recruiter</span>
+                <span className="text-xs text-muted-foreground">Kshamata Platform</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
