@@ -84,7 +84,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-workforce-ai-jwt-secret-change-in-prod}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     volumes:
-      - ai_data:/data/uploads
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,3 +120,4 @@ volumes:
   redis_data:
   ai_data:
   ollama_data:
+  uploads_data:
