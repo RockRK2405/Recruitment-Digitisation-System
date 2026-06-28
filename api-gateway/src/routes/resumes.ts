@@ -56,7 +56,16 @@ async function forwardToAiPipeline(filePath: string, originalName: string): Prom
   }
 }
 
-export function createResumesRouter(pool: Pool) {
+  // Derive a friendly candidate name from a filename (strip ext, normalize separators)
+  const nameFromFilename = (filename: string): string => {
+    const base = filename.replace(/\.[^.]+$/, '')
+    return base
+      .replace(/[_\-.]+/g, ' ')
+      .replace(/\b(cv|resume|profile)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Unnamed Candidate'
+  }
+
   router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
     try {
       const file = req.file
@@ -64,24 +73,34 @@ export function createResumesRouter(pool: Pool) {
         return res.status(400).json({ message: 'No file provided', code: 'NO_FILE' })
       }
 
-      // Record upload in DB
+      // Create a candidate row immediately so the user sees it on /candidates
+      const candidateResult = await pool.query(
+        `INSERT INTO candidates (name, status, source, primary_domain, profile_completeness)
+         VALUES ($1, 'new', 'upload', 'unknown', 10)
+         RETURNING id`,
+        [nameFromFilename(file.originalname)]
+      )
+      const candidateId = candidateResult.rows[0].id
+
+      // Record upload, linked to the candidate
       const docResult = await pool.query(
-        `INSERT INTO uploaded_documents (filename, filepath, mime_type, status, doc_type)
-         VALUES ($1, $2, $3, 'uploaded', 'resume')
+        `INSERT INTO uploaded_documents (candidate_id, filename, filepath, mime_type, status, doc_type)
+         VALUES ($1, $2, $3, $4, 'uploaded', 'resume')
          RETURNING *`,
-        [file.originalname, file.path, file.mimetype]
+        [candidateId, file.originalname, file.path, file.mimetype]
       )
       const docId = docResult.rows[0].id
 
       // Return success to the user immediately — AI processing runs in background
       res.status(201).json({
         id: docId,
+        candidateId,
         filename: file.originalname,
         status: 'uploaded',
-        message: 'Resume uploaded. AI pipeline running in background.',
+        message: 'Resume uploaded. AI parsing will enrich the profile in the background.',
       })
 
-      // Fire-and-forget: forward to Python AI service without blocking the response
+      // Fire-and-forget: forward to Python AI service to enrich the candidate
       forwardToAiPipeline(file.path, file.originalname)
         .then(async (aiResult) => {
           if (aiResult) {
@@ -117,11 +136,19 @@ export function createResumesRouter(pool: Pool) {
       const results = []
       for (const file of files) {
         try {
+          const candidateResult = await pool.query(
+            `INSERT INTO candidates (name, status, source, primary_domain, profile_completeness)
+             VALUES ($1, 'new', 'upload', 'unknown', 10)
+             RETURNING id`,
+            [nameFromFilename(file.originalname)]
+          )
+          const candidateId = candidateResult.rows[0].id
+
           const docResult = await pool.query(
-            `INSERT INTO uploaded_documents (filename, filepath, mime_type, status, doc_type, batch_id)
-             VALUES ($1, $2, $3, 'uploaded', 'resume', $4)
+            `INSERT INTO uploaded_documents (candidate_id, filename, filepath, mime_type, status, doc_type, batch_id)
+             VALUES ($1, $2, $3, $4, 'uploaded', 'resume', $5)
              RETURNING *`,
-            [file.originalname, file.path, file.mimetype, batchResult.rows[0].id]
+            [candidateId, file.originalname, file.path, file.mimetype, batchResult.rows[0].id]
           )
           const docId = docResult.rows[0].id
 
@@ -143,6 +170,7 @@ export function createResumesRouter(pool: Pool) {
             filename: file.originalname,
             status: 'uploaded',
             documentId: docId,
+            candidateId,
           })
         } catch (fileErr) {
           results.push({
