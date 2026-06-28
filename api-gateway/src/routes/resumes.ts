@@ -56,6 +56,7 @@ async function forwardToAiPipeline(filePath: string, originalName: string): Prom
   }
 }
 
+export function createResumesRouter(pool: Pool) {
   // Derive a friendly candidate name from a filename (strip ext, normalize separators)
   const nameFromFilename = (filename: string): string => {
     const base = filename.replace(/\.[^.]+$/, '')
