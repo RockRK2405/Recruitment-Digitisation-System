@@ -35,10 +35,16 @@ export const config = {
     allowedMimeTypes: [
       'application/pdf',
       'image/jpeg',
+      'image/jpg',
       'image/png',
       'image/tiff',
+      'image/bmp',
+      'image/x-ms-bmp',
+      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/zip',
+      'application/x-zip-compressed',
+      'application/octet-stream',
     ],
   },
 }

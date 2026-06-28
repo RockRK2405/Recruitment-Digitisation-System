@@ -64,42 +64,39 @@ export function createResumesRouter(pool: Pool) {
         return res.status(400).json({ message: 'No file provided', code: 'NO_FILE' })
       }
 
-      // Record upload in DB immediately
+      // Record upload in DB
       const docResult = await pool.query(
         `INSERT INTO uploaded_documents (filename, filepath, mime_type, status, doc_type)
-         VALUES ($1, $2, $3, 'processing', 'resume')
+         VALUES ($1, $2, $3, 'uploaded', 'resume')
          RETURNING *`,
         [file.originalname, file.path, file.mimetype]
       )
+      const docId = docResult.rows[0].id
 
-      // Forward to Python AI service for OCR + parsing (async-friendly)
-      const aiResult = await forwardToAiPipeline(file.path, file.originalname)
-
-      // Update document status based on AI result
-      if (aiResult) {
-        await pool.query(
-          `UPDATE uploaded_documents SET status = 'processed', ocr_confidence = $1 WHERE id = $2`,
-          [aiResult.ocr_confidence ? (aiResult.ocr_confidence as number) / 100 : null, docResult.rows[0].id]
-        )
-      } else {
-        await pool.query(
-          `UPDATE uploaded_documents SET status = 'uploaded' WHERE id = $2`,
-          [docResult.rows[0].id]
-        )
-      }
-
+      // Return success to the user immediately — AI processing runs in background
       res.status(201).json({
-        id: docResult.rows[0].id,
+        id: docId,
         filename: file.originalname,
-        status: aiResult ? 'processed' : 'uploaded',
-        message: aiResult
-          ? 'Resume processed successfully by AI pipeline.'
-          : 'Resume uploaded. AI service unavailable — processing will resume when service is restarted.',
-        ...(aiResult || {}),
+        status: 'uploaded',
+        message: 'Resume uploaded. AI pipeline running in background.',
       })
+
+      // Fire-and-forget: forward to Python AI service without blocking the response
+      forwardToAiPipeline(file.path, file.originalname)
+        .then(async (aiResult) => {
+          if (aiResult) {
+            await pool.query(
+              `UPDATE uploaded_documents SET status = 'completed', ocr_confidence = $1 WHERE id = $2`,
+              [aiResult.ocr_confidence ? (aiResult.ocr_confidence as number) / 100 : null, docId]
+            )
+          }
+        })
+        .catch((err) => {
+          console.warn(`Background AI processing for ${docId} failed:`, err instanceof Error ? err.message : err)
+        })
     } catch (error) {
       console.error('Upload resume error:', error)
-      res.status(500).json({ message: 'Upload failed', code: 'UPLOAD_FAILED' })
+      res.status(500).json({ message: 'Upload failed', code: 'UPLOAD_FAILED', detail: error instanceof Error ? error.message : String(error) })
     }
   })
 
@@ -122,26 +119,30 @@ export function createResumesRouter(pool: Pool) {
         try {
           const docResult = await pool.query(
             `INSERT INTO uploaded_documents (filename, filepath, mime_type, status, doc_type, batch_id)
-             VALUES ($1, $2, $3, 'processing', 'resume', $4)
+             VALUES ($1, $2, $3, 'uploaded', 'resume', $4)
              RETURNING *`,
             [file.originalname, file.path, file.mimetype, batchResult.rows[0].id]
           )
+          const docId = docResult.rows[0].id
 
-          const aiResult = await forwardToAiPipeline(file.path, file.originalname)
-
-          if (aiResult) {
-            await pool.query(
-              `UPDATE uploaded_documents SET status = 'processed', ocr_confidence = $1 WHERE id = $2`,
-              [aiResult.ocr_confidence ? (aiResult.ocr_confidence as number) / 100 : null, docResult.rows[0].id]
-            )
-          }
+          // Background AI processing — don't block response
+          forwardToAiPipeline(file.path, file.originalname)
+            .then(async (aiResult) => {
+              if (aiResult) {
+                await pool.query(
+                  `UPDATE uploaded_documents SET status = 'completed', ocr_confidence = $1 WHERE id = $2`,
+                  [aiResult.ocr_confidence ? (aiResult.ocr_confidence as number) / 100 : null, docId]
+                )
+              }
+            })
+            .catch((err) => {
+              console.warn(`Background AI processing for ${docId} failed:`, err instanceof Error ? err.message : err)
+            })
 
           results.push({
             filename: file.originalname,
-            status: aiResult ? 'processed' : 'uploaded',
-            documentId: docResult.rows[0].id,
-            candidateId: aiResult?.candidate_id || null,
-            candidateName: (aiResult?.parsed_profile as Record<string, unknown>)?.name || null,
+            status: 'uploaded',
+            documentId: docId,
           })
         } catch (fileErr) {
           results.push({
