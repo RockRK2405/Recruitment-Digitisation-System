@@ -1,10 +1,12 @@
+x-db-password: &db-password postgres_secure_pwd_2026
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: workforce_recruitment
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: *db-password
     ports:
       - "5432:5432"
     volumes:
@@ -28,29 +30,33 @@ services:
       timeout: 3s
       retries: 5
 
-  ai-service:
+  # Python FastAPI AI service (OCR + LLM + matching)
+  python-api:
     build:
-      context: ./ai-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
     environment:
       - ENV=production
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workforce_recruitment
-      - REDIS_URL=redis://redis:6379/0
-      - LLM_PROVIDER=ollama
+      - DATABASE_URL=postgresql://postgres:postgres_secure_pwd_2026@postgres:5432/workforce_recruitment
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
       - OLLAMA_URL=http://ollama:11434/api/generate
-      - OLLAMA_MODEL=qwen3.6:latest
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:latest}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - CHROMA_DB_PATH=/data/chromadb
-      - ENABLE_GPU=false
+      - UPLOAD_DIR=/data/uploads
     volumes:
       - ai_data:/data
-      - shared_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -71,18 +77,20 @@ services:
       - DB_PORT=5432
       - DB_NAME=workforce_recruitment
       - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - DB_PASSWORD=postgres_secure_pwd_2026
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - AI_SERVICE_URL=http://ai-service:8000
-      - JWT_SECRET=${JWT_SECRET:-workforce-ai-jwt-secret-prod}
-      - CORS_ORIGIN=http://localhost:3000
+      - AI_SERVICE_URL=http://python-api:8000
+      - JWT_SECRET=${JWT_SECRET:-workforce-ai-jwt-secret-change-in-prod}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     volumes:
-      - shared_uploads:/app/uploads
+      - ai_data:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      python-api:
         condition: service_healthy
 
   frontend:
@@ -112,4 +120,3 @@ volumes:
   redis_data:
   ai_data:
   ollama_data:
-  shared_uploads:

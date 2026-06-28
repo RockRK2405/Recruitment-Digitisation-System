@@ -60,6 +60,10 @@ def read_root():
         "system_time": time.asctime()
     }
 
+@app.get("/health", tags=["Health Monitor"])
+def health_check():
+    return {"status": "ok"}
+
 # Register Routers
 app.include_router(resumes.router, prefix="/api/resumes", tags=["Resumes Ingestion & OCR"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Job Descriptions"])

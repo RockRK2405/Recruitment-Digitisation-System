@@ -116,3 +116,32 @@ def recommend_jobs(candidate_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Job recommendation computation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Recommendation execution failed: {str(e)}")
+
+
+class TriggerMatchRequest(BaseModel):
+    job_id: int
+
+@router.post("/trigger", summary="Trigger batch match scoring for all candidates against a job")
+def trigger_match(payload: TriggerMatchRequest, db: Session = Depends(get_db)):
+    """
+    Called automatically when a new job is created via the API Gateway.
+    Scores all active candidates against the job and persists results to match_results.
+    Returns immediately with a count of candidates scored.
+    """
+    try:
+        job = db.query(JobDescription).filter(JobDescription.id == payload.job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {payload.job_id} not found.")
+
+        results = MatchingEngine.rank_candidates_for_job(db, payload.job_id, limit=500)
+        logger.info(f"Auto-match trigger: scored {len(results)} candidates for job {payload.job_id}")
+        return {
+            "job_id": payload.job_id,
+            "candidates_scored": len(results),
+            "status": "completed"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Match trigger failed for job {payload.job_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Match trigger failed: {str(e)}")
