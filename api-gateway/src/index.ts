@@ -3,6 +3,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import compression from 'compression'
 import morgan from 'morgan'
+import rateLimit from 'express-rate-limit'
 import { Pool } from 'pg'
 import { config } from './config/index.js'
 import { authenticate } from './middleware/auth.js'
@@ -49,6 +50,29 @@ async function main() {
   app.use(morgan('dev'))
   app.use(express.json({ limit: '50mb' }))
   app.use(express.urlencoded({ extended: true, limit: '50mb' }))
+
+  // Global rate limiter — 200 req/min per IP
+  app.use(rateLimit({
+    windowMs: 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests, please slow down.', code: 'RATE_LIMITED' },
+  }))
+
+  // Tighter limit for auth routes — 10 attempts/min
+  app.use('/api/auth/login', rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { message: 'Too many login attempts.', code: 'AUTH_RATE_LIMITED' },
+  }))
+
+  // Upload endpoint — 30 uploads/min per IP
+  app.use('/api/resumes/upload', rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { message: 'Upload rate limit exceeded.', code: 'UPLOAD_RATE_LIMITED' },
+  }))
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })

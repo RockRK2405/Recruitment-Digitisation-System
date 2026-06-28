@@ -196,5 +196,52 @@ export function createCandidatesRouter(pool: Pool) {
     }
   })
 
+  router.get('/export/csv', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const status = req.query.status as string
+      let query = `
+        SELECT c.id, c.name, c.email, c.phone, c.location, c.status, c.created_at,
+               r.experience_years, r.skills_list, r.primary_domain, r.education,
+               r.availability, r.notice_period, r.expected_salary,
+               (SELECT string_agg(cert.name, '; ') FROM certifications cert WHERE cert.candidate_id = c.id) as certifications
+        FROM candidates c
+        LEFT JOIN resumes r ON r.candidate_id = c.id
+      `
+      const params: string[] = []
+      if (status && status !== 'all') {
+        query += ' WHERE c.status = $1'
+        params.push(status)
+      }
+      query += ' ORDER BY c.created_at DESC'
+
+      const result = await pool.query(query, params)
+
+      const escape = (v: unknown) => {
+        if (v == null) return ''
+        const s = String(v).replace(/"/g, '""')
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s
+      }
+
+      const headers = ['ID', 'Name', 'Email', 'Phone', 'Location', 'Status', 'Created At',
+        'Experience (yrs)', 'Skills', 'Domain', 'Education', 'Availability',
+        'Notice Period', 'Expected Salary', 'Certifications']
+
+      const rows = result.rows.map((r) => [
+        r.id, r.name, r.email, r.phone, r.location, r.status, r.created_at,
+        r.experience_years, r.skills_list, r.primary_domain, r.education,
+        r.availability, r.notice_period, r.expected_salary, r.certifications,
+      ].map(escape).join(','))
+
+      const csv = [headers.join(','), ...rows].join('\n')
+
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', `attachment; filename="candidates-${Date.now()}.csv"`)
+      res.send(csv)
+    } catch (error) {
+      console.error('Export CSV error:', error)
+      res.status(500).json({ message: 'Failed to export candidates', code: 'EXPORT_FAILED' })
+    }
+  })
+
   return router
 }
