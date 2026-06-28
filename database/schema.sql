@@ -275,11 +275,11 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Seed default users (password for all: password123)
--- Default password for all users: password123
+-- Default password for all users: admin123
 INSERT INTO users (username, password_hash, display_name, email, role) VALUES
-    ('admin', '$2b$10$at92EeV983SNz.pGmU0op.qsbIKCm8THsClTRMGkUdSjNvCNAP0aq', 'Admin User', 'admin@workforce.ai', 'admin'),
-    ('recruiter', '$2b$10$at92EeV983SNz.pGmU0op.qsbIKCm8THsClTRMGkUdSjNvCNAP0aq', 'Recruiter User', 'recruiter@workforce.ai', 'recruiter'),
-    ('viewer', '$2b$10$at92EeV983SNz.pGmU0op.qsbIKCm8THsClTRMGkUdSjNvCNAP0aq', 'Viewer User', 'viewer@workforce.ai', 'viewer')
+    ('admin', '$2b$10$.ElQf3B8tAwFfZkbM2bV1uRf1Q/v5fMhsmYX9uEMarCdq75On/hm6', 'Admin User', 'admin@workforce.ai', 'admin'),
+    ('recruiter', '$2b$10$.ElQf3B8tAwFfZkbM2bV1uRf1Q/v5fMhsmYX9uEMarCdq75On/hm6', 'Recruiter User', 'recruiter@workforce.ai', 'recruiter'),
+    ('viewer', '$2b$10$.ElQf3B8tAwFfZkbM2bV1uRf1Q/v5fMhsmYX9uEMarCdq75On/hm6', 'Viewer User', 'viewer@workforce.ai', 'viewer')
 ON CONFLICT (username) DO NOTHING;
 
 -- Additional performance indexes (added Phase 3)
