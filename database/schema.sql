@@ -284,7 +284,6 @@ ON CONFLICT (username) DO NOTHING;
 
 -- Additional performance indexes (added Phase 3)
 CREATE INDEX IF NOT EXISTS idx_match_results_job_score ON match_results(job_id, overall_score DESC);
-CREATE INDEX IF NOT EXISTS idx_resumes_skills_gin ON resumes USING gin (to_tsvector('english', COALESCE(array_to_string(skills_list, ' '), '')));
 CREATE INDEX IF NOT EXISTS idx_resumes_raw_text_gin ON resumes USING gin (to_tsvector('english', COALESCE(raw_text, '')));
 CREATE INDEX IF NOT EXISTS idx_candidates_status_created ON candidates(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_uploaded_documents_candidate_status ON uploaded_documents(candidate_id, status);
