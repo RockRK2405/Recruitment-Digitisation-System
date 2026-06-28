@@ -31,10 +31,15 @@ class Settings(BaseSettings):
     # Embeddings Configuration
     EMBEDDING_MODEL_NAME: str = "intfloat/multilingual-e5-base"
     
-    # LLM Provider Configurations ('gemini' or 'ollama')
+    # LLM Provider Configurations ('gemini', 'ollama', or 'openai_compatible')
     LLM_PROVIDER: str = "ollama"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
+
+    # OpenAI-compatible provider (FreeLLMAPI, OpenRouter, Groq, Together, etc.)
+    OPENAI_COMPATIBLE_BASE_URL: str = ""
+    OPENAI_COMPATIBLE_API_KEY: str = ""
+    OPENAI_COMPATIBLE_MODEL: str = "auto"
     
     # Local Ollama Settings
     OLLAMA_MODEL: str = "qwen3.6:latest"

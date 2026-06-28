@@ -1,7 +1,7 @@
 """
 Unified LLM Provider abstraction.
 
-Priority chain: Ollama (local) → Google Gemini → None
+Priority chain: Ollama → OpenAI-compatible (FreeLLMAPI/OpenRouter/Groq/…) → Google Gemini
 All callers should use `call_llm()` or `call_chat_llm()` instead of
 making direct HTTP/SDK calls so provider switching happens in one place.
 """
@@ -23,7 +23,12 @@ def call_llm(prompt: str, expect_json: bool = False) -> Optional[str]:
         result = _ollama_generate(prompt, expect_json)
         if result is not None:
             return result
-        logger.warning("Ollama generate failed, trying Gemini fallback")
+        logger.warning("Ollama generate failed, trying next provider")
+
+    if provider in ("openai_compatible", "ollama"):
+        result = _openai_compatible_generate(prompt, expect_json)
+        if result is not None:
+            return result
 
     result = _gemini_generate(prompt, expect_json)
     if result is not None:
@@ -45,7 +50,12 @@ def call_chat_llm(messages: list[dict]) -> str:
         result = _ollama_chat(messages)
         if result is not None:
             return result
-        logger.warning("Ollama chat failed, trying Gemini fallback")
+        logger.warning("Ollama chat failed, trying next provider")
+
+    if provider in ("openai_compatible", "ollama"):
+        result = _openai_compatible_chat(messages)
+        if result is not None:
+            return result
 
     result = _gemini_chat(messages)
     if result is not None:
@@ -53,8 +63,7 @@ def call_chat_llm(messages: list[dict]) -> str:
 
     return (
         "I am having trouble connecting to the AI model. "
-        "Please ensure Ollama is running with the correct model loaded, "
-        "or set a valid GEMINI_API_KEY."
+        "Please check your LLM_PROVIDER setting and ensure the service is reachable."
     )
 
 
@@ -92,6 +101,67 @@ def _ollama_chat(messages: list[dict]) -> Optional[str]:
         logger.warning(f"Ollama chat HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
         logger.warning(f"Ollama chat exception: {e}")
+    return None
+
+
+def _openai_compatible_generate(prompt: str, expect_json: bool) -> Optional[str]:
+    """Works with FreeLLMAPI, OpenRouter, Groq, Together, and any OpenAI-compatible API."""
+    base_url = (settings.OPENAI_COMPATIBLE_BASE_URL or "").rstrip("/")
+    api_key = settings.OPENAI_COMPATIBLE_API_KEY or ""
+    if not base_url or not api_key:
+        return None
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload: dict = {
+            "model": settings.OPENAI_COMPATIBLE_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+        }
+        if expect_json:
+            payload["response_format"] = {"type": "json_object"}
+        resp = requests.post(
+            f"{base_url}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=120.0,
+        )
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        logger.warning(f"OpenAI-compatible generate HTTP {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"OpenAI-compatible generate exception: {e}")
+    return None
+
+
+def _openai_compatible_chat(messages: list[dict]) -> Optional[str]:
+    base_url = (settings.OPENAI_COMPATIBLE_BASE_URL or "").rstrip("/")
+    api_key = settings.OPENAI_COMPATIBLE_API_KEY or ""
+    if not base_url or not api_key:
+        return None
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": settings.OPENAI_COMPATIBLE_MODEL,
+            "messages": messages,
+            "temperature": 0.3,
+        }
+        resp = requests.post(
+            f"{base_url}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=120.0,
+        )
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        logger.warning(f"OpenAI-compatible chat HTTP {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"OpenAI-compatible chat exception: {e}")
     return None
 
 
