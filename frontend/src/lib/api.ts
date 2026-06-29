@@ -87,6 +87,7 @@ export const matchingApi = {
     api.get(`/matching/explain/${candidateId}/${jobId}`),
   evaluate: (jobId: string, opts?: { prefilterTopN?: number; llmTopN?: number; forceReeval?: boolean }) =>
     api.post(`/matching/evaluate/${jobId}`, opts || {}),
+  diagnose: (jobId: string) => api.get(`/matching/diagnose/${jobId}`),
   parseJob: (jobId: string) => api.post(`/jobs/${jobId}/parse`),
 }
 

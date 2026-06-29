@@ -243,13 +243,19 @@ export async function runMatchingForJob(
   pool: Pool,
   jobId: string,
   opts: RunOptions = {},
-): Promise<{ totalCandidates: number; llmEvaluated: number }> {
+): Promise<{ totalCandidates: number; llmEvaluated: number; errors: string[] }> {
+  const errors: string[] = []
   const prefilterTopN = opts.prefilterTopN ?? 20
   const llmTopN = opts.llmTopN ?? prefilterTopN
+  console.log(`[AI-MATCH] ▶ start job=${jobId} prefilterTopN=${prefilterTopN} llmTopN=${llmTopN} forceReeval=${!!opts.forceReeval}`)
 
   const jobRes = await pool.query(`SELECT * FROM job_descriptions WHERE id = $1`, [jobId])
-  if (jobRes.rows.length === 0) throw new Error('Job not found')
+  if (jobRes.rows.length === 0) {
+    console.error(`[AI-MATCH] ✗ job not found: ${jobId}`)
+    throw new Error('Job not found')
+  }
   const job = jobRes.rows[0]
+  console.log(`[AI-MATCH] ✓ job loaded: "${job.title}"`)
 
   const requiredSkills = [...asArray(job.mandatory_skills), ...asArray(job.preferred_skills), ...asArray(job.required_skills)]
   const requiredCerts = asArray(job.required_certifications)
@@ -263,8 +269,15 @@ export async function runMatchingForJob(
      FROM candidates c
      LEFT JOIN resumes r ON r.candidate_id = c.id`,
   )
+  console.log(`[AI-MATCH] ✓ loaded ${candRes.rows.length} candidates`)
+
+  if (candRes.rows.length === 0) {
+    console.warn('[AI-MATCH] no candidates in DB — nothing to score')
+    return { totalCandidates: 0, llmEvaluated: 0, errors: ['No candidates in database. Upload resumes first.'] }
+  }
 
   const weights = await getWeights(pool)
+  console.log(`[AI-MATCH] ✓ weights: llm=${weights.llm_weight} skill=${weights.skill_weight} exp=${weights.experience_weight} cert=${weights.certification_weight} edu=${weights.education_weight} rq=${weights.resume_quality_weight}`)
 
   // Stage 1: fast structured scoring for every candidate
   type Prefiltered = {
@@ -297,29 +310,38 @@ export async function runMatchingForJob(
   prefiltered.sort((a, b) => b.structScore - a.structScore)
   const shortlist = prefiltered.slice(0, Math.max(prefilterTopN, llmTopN))
 
-  // Write Stage 1 rows for ALL candidates so the dashboard has a baseline
+  // Stage 1: write baseline row for every candidate so the dashboard has data
+  let prefilterWritten = 0
   for (const p of prefiltered) {
-    await pool.query(
-      `INSERT INTO match_results (
-         candidate_id, job_id, vector_score, skill_score, agent_score,
-         overall_score, llm_score, experience_match, education_match,
-         certification_match, industry_match, leadership_score, communication_score,
-         growth_score, resume_quality, matched_skills, missing_skills,
-         strengths, weaknesses, interview_focus, recommendation, match_explanation,
-         llm_summary, llm_model_used, prompt_version, evaluated_at, stage)
-       VALUES ($1, $2, 0, $3, $4, $5, 0, $6, 0, $4, 0, 0, 0, 0, 0, $7, $8,
-               '{}', '{}', '{}', NULL, '', NULL, NULL, NULL, NULL, 'prefilter')
-       ON CONFLICT (candidate_id, job_id) DO UPDATE SET
-         skill_score = EXCLUDED.skill_score,
-         agent_score = EXCLUDED.agent_score,
-         experience_match = EXCLUDED.experience_match,
-         certification_match = EXCLUDED.certification_match,
-         matched_skills = EXCLUDED.matched_skills,
-         missing_skills = EXCLUDED.missing_skills,
-         overall_score = CASE WHEN match_results.stage = 'llm' THEN match_results.overall_score ELSE EXCLUDED.overall_score END`,
-      [p.candidateId, jobId, p.skill.score, p.cert.score, p.structScore, p.exp, p.skill.matched, p.skill.missing],
-    )
+    try {
+      await pool.query(
+        `INSERT INTO match_results (
+           candidate_id, job_id, vector_score, skill_score, agent_score,
+           overall_score, llm_score, experience_match, education_match,
+           certification_match, industry_match, leadership_score, communication_score,
+           growth_score, resume_quality, matched_skills, missing_skills,
+           strengths, weaknesses, interview_focus, recommendation, match_explanation,
+           llm_summary, llm_model_used, prompt_version, evaluated_at, stage)
+         VALUES ($1, $2, 0, $3, $4, $5, 0, $6, 0, $4, 0, 0, 0, 0, 0, $7, $8,
+                 '{}', '{}', '{}', NULL, '', NULL, NULL, NULL, NULL, 'prefilter')
+         ON CONFLICT (candidate_id, job_id) DO UPDATE SET
+           skill_score = EXCLUDED.skill_score,
+           agent_score = EXCLUDED.agent_score,
+           experience_match = EXCLUDED.experience_match,
+           certification_match = EXCLUDED.certification_match,
+           matched_skills = EXCLUDED.matched_skills,
+           missing_skills = EXCLUDED.missing_skills,
+           overall_score = CASE WHEN match_results.stage = 'llm' THEN match_results.overall_score ELSE EXCLUDED.overall_score END`,
+        [p.candidateId, jobId, p.skill.score, p.cert.score, p.structScore, p.exp, p.skill.matched, p.skill.missing],
+      )
+      prefilterWritten++
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      errors.push(`Prefilter insert failed for candidate ${p.candidateId}: ${msg}`)
+      console.error(`[AI-MATCH] ✗ prefilter insert failed for ${p.name} (${p.candidateId}):`, msg)
+    }
   }
+  console.log(`[AI-MATCH] ✓ stage 1 done: ${prefilterWritten}/${prefiltered.length} prefilter rows written`)
 
   // Stage 2: LLM evaluation for the shortlist
   let llmCount = 0
@@ -343,9 +365,16 @@ export async function runMatchingForJob(
       }
     }
 
+    console.log(`[AI-MATCH] ↻ LLM eval ${p.name} (${p.candidateId.slice(0, 8)})`)
     const evalResult = await evaluateWithLLM(job, p.rec, p.certs)
-    if (!evalResult) continue
+    if (!evalResult) {
+      const reason = `LLM eval returned null for ${p.name} — provider may be unreachable, response not valid JSON, or model refused. Check LLM_PROVIDER + OPENAI_COMPATIBLE_* env vars.`
+      errors.push(reason)
+      console.warn(`[AI-MATCH] ✗ ${reason}`)
+      continue
+    }
     llmCount++
+    console.log(`[AI-MATCH] ✓ LLM eval ${p.name}: overall=${evalResult.overall_match} rec=${evalResult.recommendation}`)
 
     const overall = hybridScore(evalResult.overall_match, {
       skill: evalResult.skill_match || p.skill.score,
@@ -355,47 +384,54 @@ export async function runMatchingForJob(
       resQuality: evalResult.resume_quality,
     }, weights)
 
-    await pool.query(
-      `UPDATE match_results SET
-         llm_score = $1,
-         overall_score = $2,
-         skill_score = $3,
-         experience_match = $4,
-         education_match = $5,
-         certification_match = $6,
-         industry_match = $7,
-         leadership_score = $8,
-         communication_score = $9,
-         growth_score = $10,
-         resume_quality = $11,
-         missing_skills = $12,
-         strengths = $13,
-         weaknesses = $14,
-         interview_focus = $15,
-         recommendation = $16,
-         llm_summary = $17,
-         match_explanation = $17,
-         llm_model_used = $18,
-         prompt_version = $19,
-         evaluated_at = NOW(),
-         stage = 'llm'
-       WHERE candidate_id = $20 AND job_id = $21`,
-      [
-        evalResult.overall_match, overall, evalResult.skill_match,
-        evalResult.experience_match, evalResult.education_match,
-        evalResult.certification_match, evalResult.industry_match,
-        evalResult.leadership_score, evalResult.communication_score,
-        evalResult.growth_score, evalResult.resume_quality,
-        evalResult.missing_skills.length > 0 ? evalResult.missing_skills : p.skill.missing,
-        evalResult.strengths, evalResult.weaknesses, evalResult.interview_focus,
-        evalResult.recommendation, evalResult.summary,
-        DEFAULT_LLM_MODEL_LABEL, PROMPT_VERSION,
-        p.candidateId, jobId,
-      ],
-    )
+    try {
+      await pool.query(
+        `UPDATE match_results SET
+           llm_score = $1,
+           overall_score = $2,
+           skill_score = $3,
+           experience_match = $4,
+           education_match = $5,
+           certification_match = $6,
+           industry_match = $7,
+           leadership_score = $8,
+           communication_score = $9,
+           growth_score = $10,
+           resume_quality = $11,
+           missing_skills = $12,
+           strengths = $13,
+           weaknesses = $14,
+           interview_focus = $15,
+           recommendation = $16,
+           llm_summary = $17,
+           match_explanation = $17,
+           llm_model_used = $18,
+           prompt_version = $19,
+           evaluated_at = NOW(),
+           stage = 'llm'
+         WHERE candidate_id = $20 AND job_id = $21`,
+        [
+          evalResult.overall_match, overall, evalResult.skill_match,
+          evalResult.experience_match, evalResult.education_match,
+          evalResult.certification_match, evalResult.industry_match,
+          evalResult.leadership_score, evalResult.communication_score,
+          evalResult.growth_score, evalResult.resume_quality,
+          evalResult.missing_skills.length > 0 ? evalResult.missing_skills : p.skill.missing,
+          evalResult.strengths, evalResult.weaknesses, evalResult.interview_focus,
+          evalResult.recommendation, evalResult.summary,
+          DEFAULT_LLM_MODEL_LABEL, PROMPT_VERSION,
+          p.candidateId, jobId,
+        ],
+      )
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      errors.push(`Stage 2 UPDATE failed for ${p.candidateId}: ${msg}`)
+      console.error(`[AI-MATCH] ✗ stage 2 update failed for ${p.name}:`, msg)
+    }
   }
 
-  return { totalCandidates: prefiltered.length, llmEvaluated: llmCount }
+  console.log(`[AI-MATCH] ▷ done job=${jobId} prefilter=${prefilterWritten} llm_evaluated=${llmCount} errors=${errors.length}`)
+  return { totalCandidates: prefiltered.length, llmEvaluated: llmCount, errors }
 }
 
 export { PROMPT_VERSION as MATCH_PROMPT_VERSION }

@@ -231,6 +231,107 @@ export function createMatchingRouter(pool: Pool) {
     }
   })
 
+  // Diagnostic: walk through every stage of the matching pipeline for a job and
+  // report what works / what's missing. Use this when the pipeline appears to
+  // do nothing — it will pinpoint the broken step.
+  router.get('/diagnose/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
+    const report: Record<string, unknown> = { jobId: req.params.jobId, checks: [] }
+    const checks = report.checks as Array<{ step: string; ok: boolean; detail?: unknown }>
+
+    // 1. Schema sanity
+    try {
+      const cols = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'match_results'`,
+      )
+      const required = ['llm_score', 'strengths', 'weaknesses', 'recommendation', 'evaluated_at', 'stage']
+      const have = new Set(cols.rows.map((r) => r.column_name))
+      const missing = required.filter((c) => !have.has(c))
+      checks.push({
+        step: 'schema:match_results',
+        ok: missing.length === 0,
+        detail: missing.length === 0 ? `${cols.rows.length} columns present` : `MISSING: ${missing.join(', ')} — run migrations or docker compose down -v`,
+      })
+    } catch (e) {
+      checks.push({ step: 'schema:match_results', ok: false, detail: e instanceof Error ? e.message : String(e) })
+    }
+
+    // 2. Scoring weights table
+    try {
+      const w = await pool.query(`SELECT key, value FROM scoring_weights`)
+      checks.push({ step: 'schema:scoring_weights', ok: w.rows.length >= 6, detail: w.rows })
+    } catch (e) {
+      checks.push({ step: 'schema:scoring_weights', ok: false, detail: e instanceof Error ? e.message : String(e) })
+    }
+
+    // 3. Job exists
+    try {
+      const j = await pool.query(`SELECT id, title, description, required_skills, mandatory_skills, experience_years_required, parsed_at FROM job_descriptions WHERE id = $1`, [req.params.jobId])
+      if (j.rows.length === 0) {
+        checks.push({ step: 'data:job', ok: false, detail: 'Job not found' })
+        return res.json(report)
+      }
+      checks.push({ step: 'data:job', ok: true, detail: { ...j.rows[0], description: j.rows[0].description ? `${(j.rows[0].description as string).slice(0, 80)}...` : null } })
+    } catch (e) {
+      checks.push({ step: 'data:job', ok: false, detail: e instanceof Error ? e.message : String(e) })
+    }
+
+    // 4. Candidates exist
+    try {
+      const c = await pool.query(`SELECT COUNT(*)::int AS n FROM candidates`)
+      const cWithResume = await pool.query(`SELECT COUNT(*)::int AS n FROM candidates c JOIN resumes r ON r.candidate_id = c.id`)
+      checks.push({
+        step: 'data:candidates',
+        ok: c.rows[0].n > 0,
+        detail: `${c.rows[0].n} candidates total, ${cWithResume.rows[0].n} with parsed resume`,
+      })
+    } catch (e) {
+      checks.push({ step: 'data:candidates', ok: false, detail: e instanceof Error ? e.message : String(e) })
+    }
+
+    // 5. LLM env config
+    const envCheck = {
+      provider: process.env.LLM_PROVIDER || '(unset)',
+      openai_url: process.env.OPENAI_COMPATIBLE_BASE_URL || '(unset)',
+      openai_key_set: !!process.env.OPENAI_COMPATIBLE_API_KEY,
+      openai_model: process.env.OPENAI_COMPATIBLE_MODEL || '(unset)',
+      ollama_url: process.env.OLLAMA_URL || '(unset)',
+      gemini_key_set: !!process.env.GEMINI_API_KEY,
+    }
+    checks.push({
+      step: 'config:llm',
+      ok: envCheck.openai_key_set || envCheck.gemini_key_set || envCheck.provider === 'ollama',
+      detail: envCheck,
+    })
+
+    // 6. Live LLM ping
+    try {
+      const { chatLLM } = await import('../lib/llm.js')
+      const r = await chatLLM([{ role: 'user', content: 'Reply with exactly the word PING.' }])
+      const ok = r.provider !== 'none' && r.text.length > 0
+      checks.push({
+        step: 'llm:ping',
+        ok,
+        detail: ok ? { provider: r.provider, response: r.text.slice(0, 200) } : 'No provider reachable',
+      })
+    } catch (e) {
+      checks.push({ step: 'llm:ping', ok: false, detail: e instanceof Error ? e.message : String(e) })
+    }
+
+    // 7. Existing match_results for this job
+    try {
+      const m = await pool.query(
+        `SELECT stage, COUNT(*)::int AS n FROM match_results WHERE job_id = $1 GROUP BY stage`,
+        [req.params.jobId],
+      )
+      checks.push({ step: 'data:match_results', ok: true, detail: m.rows })
+    } catch (e) {
+      checks.push({ step: 'data:match_results', ok: false, detail: e instanceof Error ? e.message : String(e) })
+    }
+
+    report.summary = checks.every((c) => c.ok) ? 'ALL CHECKS PASSED' : 'FAILED CHECKS — see detail above'
+    res.json(report)
+  })
+
   // New AI Matching engine: two-stage (prefilter → LLM) with hybrid scoring.
   router.post('/evaluate/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
     try {

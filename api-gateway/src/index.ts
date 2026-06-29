@@ -19,6 +19,7 @@ import { createAgentRouter } from './routes/agent.js'
 import { createDocumentsRouter } from './routes/documents.js'
 import { createAiProxyRouter } from './routes/ai-proxy.js'
 import { createSettingsRouter } from './routes/settings.js'
+import { runMigrations } from './lib/migrations.js'
 
 async function main() {
   const pool = new Pool({
@@ -39,6 +40,11 @@ async function main() {
   try {
     await pool.query('SELECT 1')
     console.log('Database connected successfully')
+    try {
+      await runMigrations(pool)
+    } catch (mErr) {
+      console.error('Migration failure — continuing startup, but AI matching may fail until fixed:', mErr instanceof Error ? mErr.message : mErr)
+    }
   } catch (err) {
     console.warn('Database connection failed, server will start but DB features will be limited:', err)
   }
