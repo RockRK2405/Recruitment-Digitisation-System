@@ -41,19 +41,188 @@ const aiClient = axios.create({
   timeout: 300000, // 5 min for OCR+AI processing
 })
 
-async function forwardToAiPipeline(filePath: string, originalName: string): Promise<Record<string, unknown> | null> {
+interface ParsedProfile {
+  name: string
+  email: string | null
+  phone: string
+  location: string
+  address: string
+  experience_years: number
+  primary_domain: string
+  skills: string[]
+  equipment_handled: string[]
+  languages: string[]
+  education: string
+  availability: string
+  certifications: Array<{
+    name: string
+    issuer: string
+    issue_date: string | null
+    expiry_date: string | null
+    registration_number: string
+    is_safety_critical: boolean
+    confidence: number
+  }>
+}
+
+interface ParseResponse {
+  ok: boolean
+  reason?: string
+  ocr_confidence: number
+  ocr_engine_used: string
+  total_pages?: number
+  raw_text: string
+  parsed: ParsedProfile
+}
+
+async function callParseEndpoint(filePath: string, originalName: string): Promise<ParseResponse | null> {
   try {
     const form = new FormData()
     form.append('file', fs.createReadStream(filePath), { filename: originalName })
-
-    const res = await aiClient.post('/api/resumes/upload', form, {
-      headers: form.getHeaders(),
-    })
+    const res = await aiClient.post<ParseResponse>('/api/resumes/parse', form, { headers: form.getHeaders() })
     return res.data
   } catch (err) {
-    console.warn('AI pipeline forwarding failed (will store file only):', err instanceof Error ? err.message : err)
+    console.warn('Parse endpoint failed:', err instanceof Error ? err.message : err)
     return null
   }
+}
+
+async function persistParsedProfile(
+  pool: Pool,
+  candidateId: string,
+  docId: string,
+  result: ParseResponse,
+) {
+  const p = result.parsed
+  // Update candidate with enriched fields. Don't overwrite name unless we got a real one.
+  await pool.query(
+    `UPDATE candidates SET
+       name = COALESCE(NULLIF($1, ''), name),
+       email = COALESCE($2, email),
+       phone = COALESCE(NULLIF($3, ''), phone),
+       location = COALESCE(NULLIF($4, ''), location),
+       address = COALESCE(NULLIF($5, ''), address),
+       primary_domain = COALESCE(NULLIF($6, ''), primary_domain),
+       experience_years = $7,
+       profile_completeness = $8,
+       ai_summary = $9,
+       updated_at = NOW()
+     WHERE id = $10`,
+    [
+      p.name,
+      p.email,
+      p.phone,
+      p.location,
+      p.address,
+      p.primary_domain,
+      p.experience_years || 0,
+      computeCompleteness(p),
+      buildAiSummary(p),
+      candidateId,
+    ],
+  )
+
+  // Upsert resume row
+  await pool.query(
+    `INSERT INTO resumes (
+       candidate_id, uploaded_doc_id, raw_text, experience_years,
+       skills_list, primary_domain, equipment_handled, languages,
+       education, availability, raw_parsed_json
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (candidate_id) DO UPDATE SET
+       uploaded_doc_id = EXCLUDED.uploaded_doc_id,
+       raw_text = EXCLUDED.raw_text,
+       experience_years = EXCLUDED.experience_years,
+       skills_list = EXCLUDED.skills_list,
+       primary_domain = EXCLUDED.primary_domain,
+       equipment_handled = EXCLUDED.equipment_handled,
+       languages = EXCLUDED.languages,
+       education = EXCLUDED.education,
+       availability = EXCLUDED.availability,
+       raw_parsed_json = EXCLUDED.raw_parsed_json,
+       updated_at = NOW()`,
+    [
+      candidateId,
+      docId,
+      result.raw_text?.slice(0, 100000) || '',
+      p.experience_years || 0,
+      p.skills,
+      p.primary_domain || null,
+      p.equipment_handled,
+      p.languages,
+      p.education || null,
+      p.availability || null,
+      JSON.stringify(p),
+    ],
+  )
+
+  // Insert certifications (idempotent by name+candidate)
+  for (const cert of p.certifications) {
+    if (!cert.name) continue
+    await pool.query(
+      `INSERT INTO certifications (
+         candidate_id, name, issuer, issue_date, expiry_date,
+         registration_number, is_safety_critical, verification_status,
+         confidence, source_document_id, raw_parsed_data
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)`,
+      [
+        candidateId,
+        cert.name,
+        cert.issuer || null,
+        cert.issue_date,
+        cert.expiry_date,
+        cert.registration_number || null,
+        cert.is_safety_critical,
+        cert.confidence || 0,
+        docId,
+        JSON.stringify(cert),
+      ],
+    )
+  }
+
+  // Mark document completed
+  await pool.query(
+    `UPDATE uploaded_documents
+     SET status = 'completed',
+         ocr_text = $1,
+         ocr_confidence = $2,
+         ocr_engine_used = $3,
+         total_pages = $4
+     WHERE id = $5`,
+    [
+      result.raw_text?.slice(0, 100000) || '',
+      result.ocr_confidence,
+      result.ocr_engine_used,
+      result.total_pages || 1,
+      docId,
+    ],
+  )
+}
+
+function computeCompleteness(p: ParsedProfile): number {
+  const fields = [
+    p.name, p.email, p.phone, p.location, p.education,
+    p.skills.length > 0, p.certifications.length > 0,
+    p.experience_years > 0, p.primary_domain,
+  ]
+  const score = fields.filter(Boolean).length / fields.length
+  return Math.round(score * 100)
+}
+
+function buildAiSummary(p: ParsedProfile): string {
+  const parts: string[] = []
+  if (p.name) parts.push(p.name)
+  if (p.experience_years > 0) parts.push(`has ${p.experience_years} years of experience`)
+  if (p.primary_domain) parts.push(`in ${p.primary_domain}`)
+  if (p.skills.length > 0) parts.push(`with expertise in ${p.skills.slice(0, 5).join(', ')}`)
+  if (p.certifications.length > 0) {
+    const certNames = p.certifications.slice(0, 3).map((c) => c.name).join(', ')
+    parts.push(`holds certifications: ${certNames}`)
+  }
+  if (p.education) parts.push(`Education: ${p.education}`)
+  return parts.length > 0 ? parts.join('. ') + '.' : ''
 }
 
 export function createResumesRouter(pool: Pool) {
@@ -101,13 +270,25 @@ export function createResumesRouter(pool: Pool) {
         message: 'Resume uploaded. AI parsing will enrich the profile in the background.',
       })
 
-      // Fire-and-forget: forward to Python AI service to enrich the candidate
-      forwardToAiPipeline(file.path, file.originalname)
-        .then(async (aiResult) => {
-          if (aiResult) {
+      // Background OCR + parse + persist
+      callParseEndpoint(file.path, file.originalname)
+        .then(async (result) => {
+          if (!result || !result.ok) {
             await pool.query(
-              `UPDATE uploaded_documents SET status = 'completed', ocr_confidence = $1 WHERE id = $2`,
-              [aiResult.ocr_confidence ? (aiResult.ocr_confidence as number) / 100 : null, docId]
+              `UPDATE uploaded_documents SET status = 'failed' WHERE id = $1`,
+              [docId],
+            )
+            console.warn(`AI parse failed for ${docId}: ${result?.reason || 'no response'}`)
+            return
+          }
+          try {
+            await persistParsedProfile(pool, candidateId, docId, result)
+            console.log(`✓ Enriched candidate ${candidateId} from ${file.originalname}`)
+          } catch (e) {
+            console.error(`Persist failed for ${docId}:`, e instanceof Error ? e.message : e)
+            await pool.query(
+              `UPDATE uploaded_documents SET status = 'failed' WHERE id = $1`,
+              [docId],
             )
           }
         })
@@ -153,14 +334,20 @@ export function createResumesRouter(pool: Pool) {
           )
           const docId = docResult.rows[0].id
 
-          // Background AI processing — don't block response
-          forwardToAiPipeline(file.path, file.originalname)
-            .then(async (aiResult) => {
-              if (aiResult) {
+          // Background OCR + parse + persist
+          callParseEndpoint(file.path, file.originalname)
+            .then(async (result) => {
+              if (!result || !result.ok) {
                 await pool.query(
-                  `UPDATE uploaded_documents SET status = 'completed', ocr_confidence = $1 WHERE id = $2`,
-                  [aiResult.ocr_confidence ? (aiResult.ocr_confidence as number) / 100 : null, docId]
+                  `UPDATE uploaded_documents SET status = 'failed' WHERE id = $1`,
+                  [docId],
                 )
+                return
+              }
+              try {
+                await persistParsedProfile(pool, candidateId, docId, result)
+              } catch (e) {
+                console.error(`Bulk persist failed for ${docId}:`, e instanceof Error ? e.message : e)
               }
             })
             .catch((err) => {
