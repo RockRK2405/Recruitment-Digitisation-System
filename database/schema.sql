@@ -298,3 +298,55 @@ CREATE INDEX IF NOT EXISTS idx_match_results_job_score ON match_results(job_id, 
 CREATE INDEX IF NOT EXISTS idx_resumes_raw_text_gin ON resumes USING gin (to_tsvector('english', COALESCE(raw_text, '')));
 CREATE INDEX IF NOT EXISTS idx_candidates_status_created ON candidates(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_uploaded_documents_candidate_status ON uploaded_documents(candidate_id, status);
+
+-- ────────────────────────────────────────────────────────────
+-- AI Matching Engine (added Phase 5)
+-- ────────────────────────────────────────────────────────────
+
+-- Extend job_descriptions with parsed structure + extra fields
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS department VARCHAR(150);
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS employment_type VARCHAR(50);
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS mandatory_skills TEXT[] DEFAULT '{}';
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS preferred_skills TEXT[] DEFAULT '{}';
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS soft_skills TEXT[] DEFAULT '{}';
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS responsibilities TEXT;
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS salary_range VARCHAR(150);
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS keywords TEXT[] DEFAULT '{}';
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS parsed_json JSONB;
+ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS parsed_at TIMESTAMP WITH TIME ZONE;
+
+-- Extend match_results for detailed LLM-driven scoring
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS llm_score REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS experience_match REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS education_match REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS certification_match REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS industry_match REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS leadership_score REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS communication_score REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS growth_score REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS resume_quality REAL DEFAULT 0;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS strengths TEXT[] DEFAULT '{}';
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS weaknesses TEXT[] DEFAULT '{}';
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS interview_focus TEXT[] DEFAULT '{}';
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS recommendation VARCHAR(50);
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS llm_summary TEXT;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS llm_model_used VARCHAR(150);
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(20);
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS evaluated_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE match_results ADD COLUMN IF NOT EXISTS stage VARCHAR(20) DEFAULT 'prefilter'; -- 'prefilter' | 'llm'
+
+-- Configurable scoring weights (key/value store)
+CREATE TABLE IF NOT EXISTS scoring_weights (
+    key VARCHAR(50) PRIMARY KEY,
+    value REAL NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO scoring_weights (key, value) VALUES
+    ('llm_weight', 0.40),
+    ('skill_weight', 0.25),
+    ('experience_weight', 0.15),
+    ('certification_weight', 0.10),
+    ('education_weight', 0.05),
+    ('resume_quality_weight', 0.05)
+ON CONFLICT (key) DO NOTHING;

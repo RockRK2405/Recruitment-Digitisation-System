@@ -9,6 +9,7 @@ import fs from 'fs'
 import axios from 'axios'
 import FormData from 'form-data'
 import { completeLLM } from '../lib/llm.js'
+import { runMatchingForJob } from '../lib/matching-engine.js'
 
 const router = Router()
 const uploadDir = path.join(process.cwd(), 'uploads')
@@ -205,6 +206,23 @@ async function persistParsedProfile(
   generateAndStoreSummary(pool, candidateId, p).catch((e) => {
     console.warn(`AI summary generation failed for ${candidateId}:`, e instanceof Error ? e.message : e)
   })
+
+  // Re-rank this candidate against every active job (cheap pre-filter writes a
+  // baseline row; LLM eval only kicks in if they make the shortlist)
+  reEvaluateActiveJobs(pool).catch((e) => {
+    console.warn(`Active-job re-eval failed:`, e instanceof Error ? e.message : e)
+  })
+}
+
+async function reEvaluateActiveJobs(pool: Pool): Promise<void> {
+  const { rows } = await pool.query(`SELECT id FROM job_descriptions WHERE status = 'active'`)
+  for (const j of rows) {
+    try {
+      await runMatchingForJob(pool, j.id, { prefilterTopN: 30, llmTopN: 0 })
+    } catch (e) {
+      console.warn(`Re-eval for job ${j.id} failed:`, e instanceof Error ? e.message : e)
+    }
+  }
 }
 
 async function generateAndStoreSummary(pool: Pool, candidateId: string, p: ParsedProfile): Promise<void> {

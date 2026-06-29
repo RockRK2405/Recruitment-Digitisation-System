@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,15 +7,50 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useThemeStore, useAuthStore } from '@/lib/store'
+import { settingsApi } from '@/lib/api'
 import {
   Settings, Moon, Sun, Database, Brain, Bell, Shield,
-  Server, CheckCircle, AlertCircle,
+  Server, CheckCircle, AlertCircle, Sliders,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+const WEIGHT_KEYS: Array<{ key: string; label: string; hint: string }> = [
+  { key: 'llm_weight', label: 'LLM Reasoning', hint: 'How much the LLM-evaluated overall_match drives the final score' },
+  { key: 'skill_weight', label: 'Skills', hint: 'Direct skill overlap vs required & preferred' },
+  { key: 'experience_weight', label: 'Experience', hint: 'Years of experience vs required years' },
+  { key: 'certification_weight', label: 'Certifications', hint: 'Required certifications match' },
+  { key: 'education_weight', label: 'Education', hint: 'Education match' },
+  { key: 'resume_quality_weight', label: 'Resume Quality', hint: 'LLM-judged resume polish & clarity' },
+]
 
 export function SettingsPage() {
   const { isDark, toggle } = useThemeStore()
   const { user } = useAuthStore()
+  const qc = useQueryClient()
+
+  const { data: weightsData } = useQuery({
+    queryKey: ['scoring-weights'],
+    queryFn: () => settingsApi.getWeights().then((r) => r.data),
+  })
+
+  const [weightDraft, setWeightDraft] = useState<Record<string, number>>({})
+  useEffect(() => {
+    if (weightsData?.weights) setWeightDraft(weightsData.weights)
+  }, [weightsData])
+
+  const saveWeights = useMutation({
+    mutationFn: (w: Record<string, number>) => settingsApi.updateWeights(w),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scoring-weights'] })
+      toast.success('Scoring weights saved — applies to next evaluation')
+    },
+    onError: () => toast.error('Failed to save weights'),
+  })
+
+  const weightSum = Object.values(weightDraft).reduce((a, b) => a + b, 0)
+  const normalizedHint = weightSum > 0 && Math.abs(weightSum - 1) > 0.01
+    ? `Note: weights sum to ${weightSum.toFixed(2)} — they will be normalized at scoring time.`
+    : ''
 
   const [aiConfig, setAiConfig] = useState({
     provider: 'ollama',
@@ -255,6 +291,52 @@ export function SettingsPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+        {/* AI Matching scoring weights — controls the hybrid score blend */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sliders className="h-4 w-4 text-primary" />
+              AI Matching Scoring Weights
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Adjust how each signal contributes to the final candidate match score. Weights take effect on the next evaluation run.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {WEIGHT_KEYS.map((w) => (
+                <div key={w.key} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">{w.label}</label>
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {Math.round((weightDraft[w.key] ?? 0) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={weightDraft[w.key] ?? 0}
+                    onChange={(e) => setWeightDraft({ ...weightDraft, [w.key]: parseFloat(e.target.value) })}
+                    className="w-full accent-primary"
+                  />
+                  <p className="text-[10px] text-muted-foreground">{w.hint}</p>
+                </div>
+              ))}
+            </div>
+            {normalizedHint && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{normalizedHint}</p>
+            )}
+            <Button
+              size="sm"
+              onClick={() => saveWeights.mutate(weightDraft)}
+              disabled={saveWeights.isPending || Object.keys(weightDraft).length === 0}
+            >
+              {saveWeights.isPending ? 'Saving...' : 'Save Weights'}
+            </Button>
           </CardContent>
         </Card>
       </div>

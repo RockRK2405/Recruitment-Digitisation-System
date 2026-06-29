@@ -85,6 +85,14 @@ export const matchingApi = {
     api.get(`/matching/recommendations/${candidateId}`),
   explain: (candidateId: string, jobId: string) =>
     api.get(`/matching/explain/${candidateId}/${jobId}`),
+  evaluate: (jobId: string, opts?: { prefilterTopN?: number; llmTopN?: number; forceReeval?: boolean }) =>
+    api.post(`/matching/evaluate/${jobId}`, opts || {}),
+  parseJob: (jobId: string) => api.post(`/jobs/${jobId}/parse`),
+}
+
+export const settingsApi = {
+  getWeights: () => api.get('/settings/weights'),
+  updateWeights: (weights: Record<string, number>) => api.put('/settings/weights', { weights }),
 }
 
 export const resumesApi = {

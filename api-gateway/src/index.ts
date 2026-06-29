@@ -18,6 +18,7 @@ import { createAnalyticsRouter } from './routes/analytics.js'
 import { createAgentRouter } from './routes/agent.js'
 import { createDocumentsRouter } from './routes/documents.js'
 import { createAiProxyRouter } from './routes/ai-proxy.js'
+import { createSettingsRouter } from './routes/settings.js'
 
 async function main() {
   const pool = new Pool({
@@ -73,6 +74,7 @@ async function main() {
   app.use('/api/analytics', createAnalyticsRouter(pool))
   app.use('/api/agent', createAgentRouter(pool))
   app.use('/api/documents', createDocumentsRouter(pool))
+  app.use('/api/settings', createSettingsRouter(pool))
   app.use('/api', createAiProxyRouter())
 
   app.use(notFoundHandler)

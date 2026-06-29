@@ -3,6 +3,8 @@ import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { Pool } from 'pg'
 import axios from 'axios'
 import { config } from '../config/index.js'
+import { parseJobDescription, persistParsedJD } from '../lib/jd-parser.js'
+import { runMatchingForJob } from '../lib/matching-engine.js'
 
 const router = Router()
 const aiClient = axios.create({ baseURL: config.aiService.url, timeout: 60000 })
@@ -99,13 +101,45 @@ export function createJobsRouter(pool: Pool) {
       }
       res.status(201).json(jobResponse)
 
-      // Fire-and-forget: trigger AI match scoring for all candidates vs this new job
-      aiClient.post('/api/match/trigger', { job_id: row.id }).catch((err) => {
-        console.warn(`Auto-match trigger for job ${row.id} failed (non-fatal): ${err.message}`)
-      })
+      // Background: LLM-parse the JD, then run two-stage matching against all candidates
+      ;(async () => {
+        try {
+          if (description) {
+            const parsed = await parseJobDescription(title, description)
+            await persistParsedJD(pool, row.id, parsed)
+            console.log(`✓ JD parsed for job ${row.id}: ${parsed.mandatory_skills.length} mandatory skills`)
+          }
+          await runMatchingForJob(pool, row.id)
+        } catch (e) {
+          console.warn(`Background JD parse/match failed for ${row.id}:`, e instanceof Error ? e.message : e)
+        }
+      })()
     } catch (error) {
       console.error('Create job error:', error)
       res.status(500).json({ message: 'Failed to create job', code: 'CREATE_FAILED' })
+    }
+  })
+
+  // Manual JD re-parse + re-match trigger
+  router.post('/:id/parse', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const { rows } = await pool.query(`SELECT title, description FROM job_descriptions WHERE id = $1`, [req.params.id])
+      if (rows.length === 0) return res.status(404).json({ message: 'Job not found', code: 'NOT_FOUND' })
+      const { title, description } = rows[0]
+      if (!description) return res.status(400).json({ message: 'No description to parse', code: 'NO_DESCRIPTION' })
+
+      const parsed = await parseJobDescription(title, description)
+      await persistParsedJD(pool, req.params.id, parsed)
+
+      res.json({ ok: true, parsed })
+
+      // Re-run matching in background
+      runMatchingForJob(pool, req.params.id).catch((e) => {
+        console.warn(`Re-match after parse failed for ${req.params.id}:`, e instanceof Error ? e.message : e)
+      })
+    } catch (error) {
+      console.error('Parse JD error:', error)
+      res.status(500).json({ message: 'Failed to parse JD', code: 'PARSE_FAILED', detail: error instanceof Error ? error.message : String(error) })
     }
   })
 

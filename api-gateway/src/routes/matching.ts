@@ -4,6 +4,7 @@ import { Pool } from 'pg'
 import axios from 'axios'
 import { config } from '../config/index.js'
 import { completeLLM } from '../lib/llm.js'
+import { runMatchingForJob } from '../lib/matching-engine.js'
 
 const router = Router()
 const aiClient = axios.create({ baseURL: config.aiService.url, timeout: 30000 })
@@ -45,14 +46,15 @@ export function createMatchingRouter(pool: Pool) {
     try {
       const result = await pool.query(
         `SELECT m.*, c.name as candidate_name, c.email, c.location, c.status,
-                c.primary_domain, r.experience_years, r.skills_list
+                c.primary_domain as candidate_domain, c.experience_years as candidate_experience,
+                r.experience_years as resume_experience, r.skills_list, r.primary_domain as resume_domain
          FROM match_results m
          JOIN candidates c ON c.id = m.candidate_id
          LEFT JOIN resumes r ON r.candidate_id = c.id
          WHERE m.job_id = $1
          ORDER BY m.overall_score DESC
-         LIMIT 50`,
-        [req.params.jobId]
+         LIMIT 100`,
+        [req.params.jobId],
       )
 
       res.json(result.rows.map((row, i) => ({
@@ -61,19 +63,38 @@ export function createMatchingRouter(pool: Pool) {
         jobId: row.job_id,
         ranking: i + 1,
         overallScore: Math.round(row.overall_score),
+        llmScore: Math.round(row.llm_score || 0),
         vectorScore: Math.round(row.vector_score),
         skillScore: Math.round(row.skill_score),
-        certificationScore: Math.round(row.agent_score || row.skill_score * 0.3),
+        experienceMatch: Math.round(row.experience_match || 0),
+        educationMatch: Math.round(row.education_match || 0),
+        certificationScore: Math.round(row.certification_match || row.agent_score || 0),
+        industryMatch: Math.round(row.industry_match || 0),
+        leadershipScore: Math.round(row.leadership_score || 0),
+        communicationScore: Math.round(row.communication_score || 0),
+        growthScore: Math.round(row.growth_score || 0),
+        resumeQuality: Math.round(row.resume_quality || 0),
+        strengths: Array.isArray(row.strengths) ? row.strengths : [],
+        weaknesses: Array.isArray(row.weaknesses) ? row.weaknesses : [],
+        missingSkills: Array.isArray(row.missing_skills) ? row.missing_skills : [],
+        matchedSkills: Array.isArray(row.matched_skills) ? row.matched_skills : [],
+        interviewFocus: Array.isArray(row.interview_focus) ? row.interview_focus : [],
+        recommendation: row.recommendation,
+        llmSummary: row.llm_summary,
         matchExplanation: row.match_explanation,
+        llmModelUsed: row.llm_model_used,
+        promptVersion: row.prompt_version,
+        evaluatedAt: row.evaluated_at,
+        stage: row.stage,
         candidate: {
           id: row.candidate_id,
           name: row.candidate_name,
           email: row.email,
           location: row.location,
           status: row.status,
-          primaryDomain: row.primary_domain || row.r_primary_domain,
-          experienceYears: row.experience_years,
-          skills: row.skills_list || [],
+          primaryDomain: row.candidate_domain || row.resume_domain,
+          experienceYears: row.candidate_experience || row.resume_experience || 0,
+          skills: Array.isArray(row.skills_list) ? row.skills_list : [],
         },
       })))
     } catch (error) {
@@ -210,9 +231,21 @@ export function createMatchingRouter(pool: Pool) {
     }
   })
 
-  // Run scoring for a given job against every candidate in the DB.
-  // Writes/updates rows in match_results. Optionally generates LLM explanations
-  // for the top N candidates (skipExplanation=true to skip the LLM step).
+  // New AI Matching engine: two-stage (prefilter → LLM) with hybrid scoring.
+  router.post('/evaluate/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const { prefilterTopN, llmTopN, forceReeval } = req.body || {}
+      const result = await runMatchingForJob(pool, req.params.jobId, {
+        prefilterTopN, llmTopN, forceReeval,
+      })
+      res.json({ jobId: req.params.jobId, ...result })
+    } catch (error) {
+      console.error('Evaluate error:', error)
+      res.status(500).json({ message: 'Failed to evaluate', code: 'EVALUATE_FAILED', detail: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
+  // Legacy keyword-only scoring (kept for backwards compatibility)
   router.post('/run/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
     try {
       const jobId = req.params.jobId
