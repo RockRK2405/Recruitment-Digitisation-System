@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { candidatesApi } from '@/lib/api'
 import { getInitials } from '@/lib/utils'
 import type { Candidate } from '@/types'
-import { Search, Users, MapPin, Briefcase, ChevronRight, SlidersHorizontal } from 'lucide-react'
+import { Search, Users, MapPin, Briefcase, ChevronRight, SlidersHorizontal, Trash2 } from 'lucide-react'
 
 const statusColors: Record<string, string> = {
   new: 'bg-blue-500/10 text-blue-600',
@@ -26,6 +27,7 @@ const statusColors: Record<string, string> = {
 
 export function CandidatesPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
 
@@ -36,6 +38,22 @@ export function CandidatesPage() {
         .then((r) => r.data),
     staleTime: 15000,
   })
+
+  const deleteCandidate = useMutation({
+    mutationFn: (id: string) => candidatesApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['candidates'] })
+      toast.success('Candidate deleted')
+    },
+    onError: () => toast.error('Failed to delete candidate'),
+  })
+
+  const handleDelete = (e: React.MouseEvent, c: Candidate) => {
+    e.stopPropagation()
+    if (window.confirm(`Delete ${c.name}? This removes their resume, certifications, notes, and match results.`)) {
+      deleteCandidate.mutate(c.id)
+    }
+  }
 
   const candidates: Candidate[] = Array.isArray(data) ? data : data?.data || []
 
@@ -166,6 +184,14 @@ export function CandidatesPage() {
                       <p className="text-[10px] text-muted-foreground">match</p>
                     </div>
                   )}
+
+                  <button
+                    onClick={(e) => handleDelete(e, c)}
+                    className="shrink-0 p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    title="Delete candidate"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
 
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>

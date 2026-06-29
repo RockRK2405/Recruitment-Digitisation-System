@@ -243,6 +243,18 @@ export function createCandidatesRouter(pool: Pool) {
     }
   })
 
+  // Delete a candidate (cascades to resume, certs, notes, match_results, docs)
+  router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const r = await pool.query(`DELETE FROM candidates WHERE id = $1`, [req.params.id])
+      if (r.rowCount === 0) return res.status(404).json({ message: 'Candidate not found', code: 'NOT_FOUND' })
+      res.status(204).send()
+    } catch (e) {
+      console.error('Delete candidate error:', e)
+      res.status(500).json({ message: 'Failed to delete candidate', code: 'DELETE_FAILED' })
+    }
+  })
+
   // ─── Notes CRUD ─────────────────────────────────────────────
   router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
     try {

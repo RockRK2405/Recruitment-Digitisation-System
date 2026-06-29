@@ -17,12 +17,13 @@ import {
   ArrowLeft, MapPin, Mail, Phone,
   Briefcase, GraduationCap, Award,
   Star, MessageSquare, Share2, Download,
-  CheckCircle, AlertCircle,
+  CheckCircle, AlertCircle, Trash2,
 } from 'lucide-react'
 
 export function CandidateProfilePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
 
   const { data: candidate, isLoading } = useQuery({
@@ -30,6 +31,23 @@ export function CandidateProfilePage() {
     queryFn: () => resumesApi.profile(id!).then((r) => r.data),
     enabled: !!id,
   })
+
+  const deleteCandidate = useMutation({
+    mutationFn: () => candidatesApi.delete(id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['candidates'] })
+      toast.success('Candidate deleted')
+      navigate('/candidates')
+    },
+    onError: () => toast.error('Failed to delete candidate'),
+  })
+
+  const handleDelete = () => {
+    if (!candidate) return
+    if (window.confirm(`Delete ${candidate.name || 'this candidate'}? This removes their resume, certifications, notes, and match results. Cannot be undone.`)) {
+      deleteCandidate.mutate()
+    }
+  }
 
   if (isLoading) {
     return (
@@ -66,10 +84,22 @@ export function CandidateProfilePage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <Button variant="ghost" className="gap-2 -ml-2" onClick={() => navigate('/candidates')}>
-        <ArrowLeft className="h-4 w-4" />
-        Back to Candidates
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" className="gap-2 -ml-2" onClick={() => navigate('/candidates')}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Candidates
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+          onClick={handleDelete}
+          disabled={deleteCandidate.isPending}
+        >
+          <Trash2 className="h-4 w-4" />
+          {deleteCandidate.isPending ? 'Deleting...' : 'Delete'}
+        </Button>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">
