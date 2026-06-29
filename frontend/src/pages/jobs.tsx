@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { jobsApi } from '@/lib/api'
 import type { JobDescription } from '@/types'
-import { Briefcase, Plus, MapPin, Clock, Search, Users } from 'lucide-react'
+import { Briefcase, Plus, MapPin, Clock, Search, Users, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const schema = z.object({
@@ -47,6 +47,21 @@ export function JobsPage() {
     resolver: zodResolver(schema),
     defaultValues: { experienceYearsRequired: 0 },
   })
+
+  const deleteJob = useMutation({
+    mutationFn: (id: string) => jobsApi.delete(id),
+    onSuccess: () => {
+      toast.success('Job deleted')
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+    },
+    onError: () => toast.error('Failed to delete job'),
+  })
+
+  const handleDelete = (job: JobDescription) => {
+    if (window.confirm(`Delete "${job.title}"? This also removes all match results for this job.`)) {
+      deleteJob.mutate(String(job.id))
+    }
+  }
 
   const create = useMutation({
     mutationFn: (d: FormData) =>
@@ -148,9 +163,18 @@ export function JobsPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-base leading-tight">{job.title}</CardTitle>
-                  <Badge variant={job.status === 'active' ? 'default' : 'secondary'} className="shrink-0 capitalize">
-                    {job.status}
-                  </Badge>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Badge variant={job.status === 'active' ? 'default' : 'secondary'} className="capitalize">
+                      {job.status}
+                    </Badge>
+                    <button
+                      onClick={() => handleDelete(job)}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="Delete job"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
