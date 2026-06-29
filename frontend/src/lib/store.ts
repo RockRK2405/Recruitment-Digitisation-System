@@ -27,25 +27,18 @@ export const useAuthStore = create<AuthStore>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
 }))
 
+// Theme store removed — app is light-mode only.
+// Kept as a stub for any unmigrated imports; isDark always false, toggles are no-ops.
 interface ThemeStore {
   isDark: boolean
   toggle: () => void
   setDark: (val: boolean) => void
 }
 
-export const useThemeStore = create<ThemeStore>((set) => ({
-  isDark: true,
-  toggle: () => {
-    set((state) => {
-      const newDark = !state.isDark
-      document.documentElement.classList.toggle('dark', newDark)
-      return { isDark: newDark }
-    })
-  },
-  setDark: (val) => {
-    document.documentElement.classList.toggle('dark', val)
-    set({ isDark: val })
-  },
+export const useThemeStore = create<ThemeStore>(() => ({
+  isDark: false,
+  toggle: () => {},
+  setDark: () => {},
 }))
 
 interface SidebarStore {

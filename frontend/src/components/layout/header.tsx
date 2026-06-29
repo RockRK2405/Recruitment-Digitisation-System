@@ -1,4 +1,3 @@
-import { useThemeStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -10,11 +9,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { Bell, Moon, Sun, Search, Settings } from 'lucide-react'
+import { Bell, Search, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export function Header() {
-  const { isDark, toggle } = useThemeStore()
   const navigate = useNavigate()
 
   return (
@@ -35,10 +33,6 @@ export function Header() {
           <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
             3
           </span>
-        </Button>
-
-        <Button variant="ghost" size="icon" onClick={toggle}>
-          {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
 
         <DropdownMenu>

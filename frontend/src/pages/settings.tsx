@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { useThemeStore, useAuthStore } from '@/lib/store'
+import { useAuthStore } from '@/lib/store'
 import { settingsApi } from '@/lib/api'
 import {
-  Settings, Moon, Sun, Database, Brain, Bell, Shield,
+  Settings, Database, Brain, Bell, Shield,
   Server, CheckCircle, AlertCircle, Sliders,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -24,7 +24,6 @@ const WEIGHT_KEYS: Array<{ key: string; label: string; hint: string }> = [
 ]
 
 export function SettingsPage() {
-  const { isDark, toggle } = useThemeStore()
   const { user } = useAuthStore()
   const qc = useQueryClient()
 
@@ -81,28 +80,6 @@ export function SettingsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Appearance */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              {isDark ? <Moon className="h-4 w-4 text-primary" /> : <Sun className="h-4 w-4 text-primary" />}
-              Appearance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Dark Mode</p>
-                <p className="text-xs text-muted-foreground">Switch between light and dark themes</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={toggle}>
-                {isDark ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
-                {isDark ? 'Light Mode' : 'Dark Mode'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Account */}
         <Card>
           <CardHeader>
