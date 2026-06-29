@@ -247,8 +247,11 @@ export function createMatchingRouter(pool: Pool) {
 
         const expScore = experienceScore(requiredExp, cand.experience_years || 0)
 
-        // Weighted overall — skills dominate, then exp, then certs
-        const overall = Math.round(skillRes.score * 0.5 + expScore * 0.3 + certRes.score * 0.2)
+        // Weighted overall — skills + experience only. Certifications tracked
+        // separately so candidates without specific cert documents aren't
+        // unfairly penalized; certs act as a bonus signal in the LLM
+        // explanation rather than a numeric weight.
+        const overall = Math.round(skillRes.score * 0.7 + expScore * 0.3)
 
         candidatesWithScore.push({
           candidateId: cand.id,

@@ -145,7 +145,7 @@ export function ResumesPage() {
         <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">AI Pipeline</p>
-          <p>Each uploaded file goes through: OCR (PaddleOCR → EasyOCR → Tesseract) → Entity Extraction → Safety Certification Audit → Candidate Profile Creation.</p>
+          <p>Each uploaded file goes through: OCR (PaddleOCR → EasyOCR → Tesseract) → Entity Extraction → Candidate Profile Creation.</p>
         </div>
       </div>
 
