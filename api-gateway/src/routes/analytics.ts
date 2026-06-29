@@ -27,16 +27,16 @@ export function createAnalyticsRouter(pool: Pool) {
 
   router.get('/skills', authenticate, async (_req: AuthRequest, res: Response) => {
     try {
-      // skills_list is a TEXT column with comma-separated values
+      // skills_list is TEXT[] (Postgres array)
       const result = await pool.query(
-        `SELECT trim(skill) as name, COUNT(*) as count
-         FROM resumes,
-              unnest(string_to_array(skills_list, ',')) AS skill
-         WHERE skills_list IS NOT NULL AND skills_list != ''
-           AND trim(skill) != ''
+        `SELECT trim(skill) AS name, COUNT(*) AS count
+         FROM resumes, unnest(skills_list) AS skill
+         WHERE skills_list IS NOT NULL
+           AND array_length(skills_list, 1) > 0
+           AND trim(skill) <> ''
          GROUP BY trim(skill)
          ORDER BY count DESC
-         LIMIT 20`
+         LIMIT 20`,
       )
       res.json(result.rows.map((r) => ({ name: r.name, count: parseInt(r.count) })))
     } catch (error) {

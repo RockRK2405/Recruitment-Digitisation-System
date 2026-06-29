@@ -181,15 +181,15 @@ export function createMatchingRouter(pool: Pool) {
         `SELECT c.id, c.name, c.status, c.location, r.experience_years, r.skills_list, r.primary_domain
          FROM candidates c
          LEFT JOIN resumes r ON r.candidate_id = c.id
-         WHERE r.raw_text ILIKE $1 OR c.name ILIKE $1 OR r.skills_list ILIKE $1 OR r.primary_domain ILIKE $1
+         WHERE r.raw_text ILIKE $1 OR c.name ILIKE $1 OR array_to_string(r.skills_list, ',') ILIKE $1 OR r.primary_domain ILIKE $1
          LIMIT $2`,
-        [`%${query}%`, limit]
+        [`%${query}%`, limit],
       )
       res.json(result.rows.map((row) => ({
         id: row.id,
         name: row.name,
         experienceYears: row.experience_years,
-        skills: row.skills_list ? row.skills_list.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+        skills: Array.isArray(row.skills_list) ? row.skills_list : (typeof row.skills_list === 'string' ? row.skills_list.split(',').map((s: string) => s.trim()).filter(Boolean) : []),
         primaryDomain: row.primary_domain,
         location: row.location,
         status: row.status,

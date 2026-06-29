@@ -19,7 +19,8 @@ export function createCandidatesRouter(pool: Pool) {
       let paramIndex = 1
 
       if (search) {
-        whereClause += ` AND (c.name ILIKE $${paramIndex} OR c.email ILIKE $${paramIndex} OR r.skills_list ILIKE $${paramIndex} OR r.primary_domain ILIKE $${paramIndex})`
+        // skills_list is TEXT[]; flatten to text for LIKE search
+        whereClause += ` AND (c.name ILIKE $${paramIndex} OR c.email ILIKE $${paramIndex} OR array_to_string(r.skills_list, ',') ILIKE $${paramIndex} OR r.primary_domain ILIKE $${paramIndex})`
         params.push(`%${search}%`)
         paramIndex++
       }
