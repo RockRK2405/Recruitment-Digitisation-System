@@ -171,6 +171,17 @@ CREATE TABLE recruiter_feedback (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Candidate Notes (recruiter notes per candidate)
+CREATE TABLE candidate_notes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    author VARCHAR(150),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_candidate_notes_candidate ON candidate_notes(candidate_id, created_at DESC);
+
 -- Candidate Tags
 CREATE TABLE candidate_tags (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

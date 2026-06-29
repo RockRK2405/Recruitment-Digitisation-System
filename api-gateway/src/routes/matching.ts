@@ -3,9 +3,42 @@ import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { Pool } from 'pg'
 import axios from 'axios'
 import { config } from '../config/index.js'
+import { completeLLM } from '../lib/llm.js'
 
 const router = Router()
 const aiClient = axios.create({ baseURL: config.aiService.url, timeout: 30000 })
+
+function normalize(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+function asArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val.map((v) => String(v))
+  if (typeof val === 'string') return val.split(',').map((s) => s.trim()).filter(Boolean)
+  return []
+}
+
+function skillOverlapScore(required: string[], candidate: string[]): { score: number; matched: string[]; missing: string[] } {
+  const req = required.map(normalize).filter(Boolean)
+  const cand = new Set(candidate.map(normalize).filter(Boolean))
+  if (req.length === 0) return { score: 100, matched: [], missing: [] }
+  const matched: string[] = []
+  const missing: string[] = []
+  for (const r of req) {
+    const hit = Array.from(cand).some((c) => c === r || c.includes(r) || r.includes(c))
+    if (hit) matched.push(r)
+    else missing.push(r)
+  }
+  return { score: Math.round((matched.length / req.length) * 100), matched, missing }
+}
+
+function experienceScore(required: number | null, actual: number | null): number {
+  const req = required || 0
+  const act = actual || 0
+  if (req === 0) return 100
+  if (act >= req) return 100
+  return Math.round((act / req) * 100)
+}
 
 export function createMatchingRouter(pool: Pool) {
   router.get('/rank/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
@@ -174,6 +207,128 @@ export function createMatchingRouter(pool: Pool) {
     } catch (error) {
       console.error('Explain error:', error)
       res.status(500).json({ message: 'Failed to get explanation', code: 'EXPLAIN_FAILED' })
+    }
+  })
+
+  // Run scoring for a given job against every candidate in the DB.
+  // Writes/updates rows in match_results. Optionally generates LLM explanations
+  // for the top N candidates (skipExplanation=true to skip the LLM step).
+  router.post('/run/:jobId', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const jobId = req.params.jobId
+      const { explainTopN = 5, skipExplanation = false } = req.body || {}
+
+      const jobRes = await pool.query(`SELECT * FROM job_descriptions WHERE id = $1`, [jobId])
+      if (jobRes.rows.length === 0) {
+        return res.status(404).json({ message: 'Job not found', code: 'NOT_FOUND' })
+      }
+      const job = jobRes.rows[0]
+      const requiredSkills = asArray(job.required_skills)
+      const requiredCerts = asArray(job.required_certifications)
+      const requiredExp: number = job.experience_years_required || 0
+
+      const candRes = await pool.query(
+        `SELECT c.id, c.name, c.location, c.experience_years, c.primary_domain, c.ai_summary,
+                r.skills_list, r.equipment_handled, r.education
+         FROM candidates c
+         LEFT JOIN resumes r ON r.candidate_id = c.id`,
+      )
+
+      const candidatesWithScore: Array<{ candidateId: string; overall: number; skill: number; exp: number; cert: number; matched: string[]; missing: string[]; name: string }> = []
+
+      for (const cand of candRes.rows) {
+        const candSkills = asArray(cand.skills_list)
+        const candEquipment = asArray(cand.equipment_handled)
+        const skillRes = skillOverlapScore(requiredSkills, [...candSkills, ...candEquipment])
+
+        const certRes2 = await pool.query(`SELECT name FROM certifications WHERE candidate_id = $1`, [cand.id])
+        const candCerts = certRes2.rows.map((r) => String(r.name))
+        const certRes = skillOverlapScore(requiredCerts, candCerts)
+
+        const expScore = experienceScore(requiredExp, cand.experience_years || 0)
+
+        // Weighted overall — skills dominate, then exp, then certs
+        const overall = Math.round(skillRes.score * 0.5 + expScore * 0.3 + certRes.score * 0.2)
+
+        candidatesWithScore.push({
+          candidateId: cand.id,
+          name: cand.name,
+          overall,
+          skill: skillRes.score,
+          exp: expScore,
+          cert: certRes.score,
+          matched: skillRes.matched,
+          missing: skillRes.missing,
+        })
+      }
+
+      candidatesWithScore.sort((a, b) => b.overall - a.overall)
+
+      // Upsert match_results for every candidate. Initial explanation is empty;
+      // top-N get an LLM-generated explanation right after.
+      for (const c of candidatesWithScore) {
+        await pool.query(
+          `INSERT INTO match_results (candidate_id, job_id, vector_score, skill_score, agent_score, overall_score, matched_skills, missing_skills, match_explanation)
+           VALUES ($1, $2, 0, $3, $4, $5, $6, $7, '')
+           ON CONFLICT (candidate_id, job_id) DO UPDATE SET
+             skill_score = EXCLUDED.skill_score,
+             agent_score = EXCLUDED.agent_score,
+             overall_score = EXCLUDED.overall_score,
+             matched_skills = EXCLUDED.matched_skills,
+             missing_skills = EXCLUDED.missing_skills`,
+          [c.candidateId, jobId, c.skill, c.cert, c.overall, c.matched, c.missing],
+        )
+      }
+
+      // LLM explanations for top N — fire-and-forget so the response is fast
+      if (!skipExplanation && candidatesWithScore.length > 0) {
+        const top = candidatesWithScore.slice(0, explainTopN)
+        Promise.all(top.map(async (c) => {
+          try {
+            const prompt = `You are an HR analyst. In 2 sentences, explain why this candidate scored ${c.overall}/100 for this job. Be specific about strengths and gaps. No preamble.
+
+Job: ${job.title}
+Required skills: ${requiredSkills.join(', ') || 'none specified'}
+Required experience: ${requiredExp} years
+Required certifications: ${requiredCerts.join(', ') || 'none'}
+
+Candidate: ${c.name}
+Matched skills: ${c.matched.join(', ') || 'none'}
+Missing skills: ${c.missing.join(', ') || 'none'}
+Skill score: ${c.skill}/100  |  Experience score: ${c.exp}/100  |  Certification score: ${c.cert}/100`
+
+            const explanation = await completeLLM(prompt)
+            if (explanation && explanation.length > 20 && !explanation.toLowerCase().startsWith("i'm unable")) {
+              await pool.query(
+                `UPDATE match_results SET match_explanation = $1 WHERE candidate_id = $2 AND job_id = $3`,
+                [explanation.slice(0, 4000), c.candidateId, jobId],
+              )
+            }
+          } catch (e) {
+            console.warn(`LLM explanation failed for ${c.candidateId}:`, e instanceof Error ? e.message : e)
+          }
+        })).catch(() => {})
+      }
+
+      res.json({
+        jobId,
+        jobTitle: job.title,
+        totalCandidates: candidatesWithScore.length,
+        explainedTopN: skipExplanation ? 0 : Math.min(explainTopN, candidatesWithScore.length),
+        top: candidatesWithScore.slice(0, 10).map((c) => ({
+          candidateId: c.candidateId,
+          candidateName: c.name,
+          overallScore: c.overall,
+          skillScore: c.skill,
+          experienceScore: c.exp,
+          certificationScore: c.cert,
+          matchedSkills: c.matched,
+          missingSkills: c.missing,
+        })),
+      })
+    } catch (error) {
+      console.error('Matching run error:', error)
+      res.status(500).json({ message: 'Failed to run matching', code: 'RUN_FAILED', detail: error instanceof Error ? error.message : String(error) })
     }
   })
 

@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid'
 import fs from 'fs'
 import axios from 'axios'
 import FormData from 'form-data'
+import { completeLLM } from '../lib/llm.js'
 
 const router = Router()
 const uploadDir = path.join(process.cwd(), 'uploads')
@@ -199,6 +200,36 @@ async function persistParsedProfile(
       docId,
     ],
   )
+
+  // LLM-generated narrative summary (fire-and-forget, replaces template)
+  generateAndStoreSummary(pool, candidateId, p).catch((e) => {
+    console.warn(`AI summary generation failed for ${candidateId}:`, e instanceof Error ? e.message : e)
+  })
+}
+
+async function generateAndStoreSummary(pool: Pool, candidateId: string, p: ParsedProfile): Promise<void> {
+  const prompt = `You are an HR analyst at an industrial recruitment firm. Write a concise 3-4 sentence professional summary of this candidate, suitable for a recruiter dashboard. Cover their experience, domain expertise, key skills, notable certifications, and any standout strengths. Be factual; do not invent details.
+
+Candidate profile:
+- Name: ${p.name || 'Unknown'}
+- Experience: ${p.experience_years || 0} years
+- Domain: ${p.primary_domain || 'unspecified'}
+- Location: ${p.location || 'unspecified'}
+- Skills: ${p.skills.join(', ') || 'none listed'}
+- Equipment handled: ${p.equipment_handled.join(', ') || 'none listed'}
+- Languages: ${p.languages.join(', ') || 'unspecified'}
+- Education: ${p.education || 'unspecified'}
+- Certifications: ${p.certifications.map((c) => c.name).join(', ') || 'none'}
+
+Write the summary directly, no preamble.`
+
+  const summary = await completeLLM(prompt)
+  if (summary && summary.length > 20 && !summary.toLowerCase().startsWith("i'm unable")) {
+    await pool.query(
+      `UPDATE candidates SET ai_summary = $1, updated_at = NOW() WHERE id = $2`,
+      [summary.slice(0, 4000), candidateId],
+    )
+  }
 }
 
 function computeCompleteness(p: ParsedProfile): number {
@@ -389,31 +420,29 @@ export function createResumesRouter(pool: Pool) {
 
   router.get('/profile/:candidateId', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-      // Try Python AI service first for richer data
-      try {
-        const aiRes = await aiClient.get(`/api/resumes/profile/${req.params.candidateId}`)
-        return res.json(aiRes.data)
-      } catch {
-        // Fall back to direct DB query
-      }
-
       const result = await pool.query(
-        `SELECT c.id, c.name, c.email, c.phone, c.location, c.status, c.low_literacy_flag, c.created_at,
-                r.experience_years, r.skills_list, r.primary_domain, r.equipment_handled,
-                r.languages, r.education, r.availability
+        `SELECT c.id, c.name, c.email, c.phone, c.location, c.address, c.status,
+                c.low_literacy_flag, c.created_at, c.updated_at, c.experience_years,
+                c.primary_domain, c.profile_completeness, c.ai_summary,
+                r.skills_list, r.equipment_handled, r.languages, r.education,
+                r.availability, r.raw_text
          FROM candidates c
          LEFT JOIN resumes r ON r.candidate_id = c.id
          WHERE c.id = $1`,
-        [req.params.candidateId]
+        [req.params.candidateId],
       )
       if (result.rows.length === 0) {
         return res.status(404).json({ message: 'Candidate not found', code: 'NOT_FOUND' })
       }
       const row = result.rows[0]
+      const toArray = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : (typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])
 
       const certs = await pool.query(
-        `SELECT name, issuer, verification_status as status FROM certifications WHERE candidate_id = $1`,
-        [req.params.candidateId]
+        `SELECT id, name, issuer, issue_date, expiry_date, registration_number,
+                is_safety_critical, verification_status, confidence
+         FROM certifications WHERE candidate_id = $1
+         ORDER BY issue_date DESC NULLS LAST`,
+        [req.params.candidateId],
       )
 
       res.json({
@@ -422,20 +451,38 @@ export function createResumesRouter(pool: Pool) {
         email: row.email,
         phone: row.phone,
         location: row.location,
+        address: row.address,
         status: row.status,
+        primaryDomain: row.primary_domain,
+        experienceYears: row.experience_years || 0,
+        profileCompleteness: row.profile_completeness || 0,
+        aiSummary: row.ai_summary,
+        education: row.education,
         low_literacy_flag: row.low_literacy_flag,
         created_at: row.created_at,
+        updated_at: row.updated_at,
         resume: {
-          experience_years: row.experience_years,
-          skills_list: row.skills_list,
-          skills: row.skills_list ? row.skills_list.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+          experience_years: row.experience_years || 0,
+          skills: toArray(row.skills_list),
+          skills_list: toArray(row.skills_list).join(', '),
           primary_domain: row.primary_domain,
-          equipment_handled: row.equipment_handled,
-          languages: row.languages,
+          equipment_handled: toArray(row.equipment_handled),
+          languages: toArray(row.languages),
           education: row.education,
           availability: row.availability,
+          raw_text_preview: typeof row.raw_text === 'string' ? row.raw_text.slice(0, 500) : '',
         },
-        certifications: certs.rows,
+        certifications: certs.rows.map((c) => ({
+          id: c.id,
+          name: c.name,
+          issuer: c.issuer,
+          issueDate: c.issue_date,
+          expiryDate: c.expiry_date,
+          registrationNumber: c.registration_number,
+          isSafetyCritical: c.is_safety_critical,
+          status: c.verification_status,
+          confidence: c.confidence,
+        })),
       })
     } catch (error) {
       console.error('Get profile error:', error)

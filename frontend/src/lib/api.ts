@@ -58,6 +58,10 @@ export const candidatesApi = {
   delete: (id: string) => api.delete(`/candidates/${id}`),
   timeline: (id: string) => api.get(`/candidates/${id}/timeline`),
   tags: (id: string) => api.get(`/candidates/${id}/tags`),
+  listNotes: (id: string) => api.get(`/candidates/${id}/notes`),
+  createNote: (id: string, body: string) => api.post(`/candidates/${id}/notes`, { body }),
+  updateNote: (id: string, noteId: string, body: string) => api.patch(`/candidates/${id}/notes/${noteId}`, { body }),
+  deleteNote: (id: string, noteId: string) => api.delete(`/candidates/${id}/notes/${noteId}`),
 }
 
 export const jobsApi = {

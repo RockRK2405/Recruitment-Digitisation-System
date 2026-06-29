@@ -243,5 +243,85 @@ export function createCandidatesRouter(pool: Pool) {
     }
   })
 
+  // ─── Notes CRUD ─────────────────────────────────────────────
+  router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, body, author, created_at, updated_at
+         FROM candidate_notes WHERE candidate_id = $1
+         ORDER BY created_at DESC`,
+        [req.params.id],
+      )
+      res.json(rows.map((n) => ({
+        id: n.id, body: n.body, author: n.author,
+        createdAt: n.created_at, updatedAt: n.updated_at,
+      })))
+    } catch (e) {
+      console.error('List notes error:', e)
+      res.status(500).json({ message: 'Failed to list notes', code: 'NOTES_LIST_FAILED' })
+    }
+  })
+
+  router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const { body, author } = req.body
+      if (!body || typeof body !== 'string' || !body.trim()) {
+        return res.status(400).json({ message: 'Note body is required', code: 'EMPTY_NOTE' })
+      }
+      const { rows } = await pool.query(
+        `INSERT INTO candidate_notes (candidate_id, body, author)
+         VALUES ($1, $2, $3)
+         RETURNING id, body, author, created_at, updated_at`,
+        [req.params.id, body.trim(), author || 'recruiter'],
+      )
+      const n = rows[0]
+      res.status(201).json({
+        id: n.id, body: n.body, author: n.author,
+        createdAt: n.created_at, updatedAt: n.updated_at,
+      })
+    } catch (e) {
+      console.error('Create note error:', e)
+      res.status(500).json({ message: 'Failed to create note', code: 'NOTE_CREATE_FAILED' })
+    }
+  })
+
+  router.patch('/:id/notes/:noteId', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const { body } = req.body
+      if (!body || typeof body !== 'string' || !body.trim()) {
+        return res.status(400).json({ message: 'Note body is required', code: 'EMPTY_NOTE' })
+      }
+      const { rows } = await pool.query(
+        `UPDATE candidate_notes SET body = $1, updated_at = NOW()
+         WHERE id = $2 AND candidate_id = $3
+         RETURNING id, body, author, created_at, updated_at`,
+        [body.trim(), req.params.noteId, req.params.id],
+      )
+      if (rows.length === 0) return res.status(404).json({ message: 'Note not found', code: 'NOT_FOUND' })
+      const n = rows[0]
+      res.json({
+        id: n.id, body: n.body, author: n.author,
+        createdAt: n.created_at, updatedAt: n.updated_at,
+      })
+    } catch (e) {
+      console.error('Update note error:', e)
+      res.status(500).json({ message: 'Failed to update note', code: 'NOTE_UPDATE_FAILED' })
+    }
+  })
+
+  router.delete('/:id/notes/:noteId', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+      const r = await pool.query(
+        `DELETE FROM candidate_notes WHERE id = $1 AND candidate_id = $2`,
+        [req.params.noteId, req.params.id],
+      )
+      if (r.rowCount === 0) return res.status(404).json({ message: 'Note not found', code: 'NOT_FOUND' })
+      res.status(204).send()
+    } catch (e) {
+      console.error('Delete note error:', e)
+      res.status(500).json({ message: 'Failed to delete note', code: 'NOTE_DELETE_FAILED' })
+    }
+  })
+
   return router
 }

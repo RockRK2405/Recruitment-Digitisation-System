@@ -3,13 +3,104 @@ import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { Pool } from 'pg'
 import axios from 'axios'
 import { config } from '../config/index.js'
+import { chatLLM, ChatMessage } from '../lib/llm.js'
 
 const router = Router()
 
 const aiClient = axios.create({
   baseURL: config.aiService.url,
-  timeout: 120000, // 2 min for LLM responses
+  timeout: 120000,
 })
+
+// In-memory session store. Survives restarts only as long as the process runs.
+// For prod, persist to Redis — but for single-tenant use this is fine.
+const sessions = new Map<string, ChatMessage[]>()
+
+function getHistory(id: string): ChatMessage[] {
+  if (!sessions.has(id)) sessions.set(id, [])
+  return sessions.get(id)!
+}
+
+async function buildRagContext(pool: Pool, message: string): Promise<string> {
+  const sections: string[] = []
+
+  // Recent candidates — always included for general context
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.id, c.name, c.email, c.phone, c.location, c.status, c.experience_years,
+              c.primary_domain, c.ai_summary, r.skills_list, r.education, r.languages,
+              r.equipment_handled
+       FROM candidates c
+       LEFT JOIN resumes r ON r.candidate_id = c.id
+       ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
+       LIMIT 30`,
+    )
+    if (rows.length > 0) {
+      sections.push(
+        'CANDIDATE DATABASE:\n' + rows.map((c, i) => {
+          const skills = Array.isArray(c.skills_list) ? c.skills_list.join(', ') : (c.skills_list || 'N/A')
+          return `${i + 1}. ${c.name || 'Unknown'} | ID: ${c.id} | ${c.experience_years || 0} yrs | ${c.primary_domain || 'N/A'} | ${c.location || 'N/A'} | Skills: ${skills} | Status: ${c.status}`
+        }).join('\n'),
+      )
+    }
+  } catch (e) {
+    console.warn('candidate context fetch failed:', e instanceof Error ? e.message : e)
+  }
+
+  // Active jobs
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, title, location, experience_years_required, required_skills, required_certifications, industry
+       FROM job_descriptions WHERE status = 'active' ORDER BY created_at DESC LIMIT 15`,
+    )
+    if (rows.length > 0) {
+      sections.push(
+        'ACTIVE JOB OPENINGS:\n' + rows.map((j) => {
+          const skills = Array.isArray(j.required_skills) ? j.required_skills.join(', ') : (j.required_skills || 'N/A')
+          const certs = Array.isArray(j.required_certifications) ? j.required_certifications.join(', ') : (j.required_certifications || 'none')
+          return `- [${j.id}] ${j.title} | ${j.location || 'N/A'} | ${j.experience_years_required || 0}+ yrs | Industry: ${j.industry || 'N/A'} | Skills: ${skills} | Certs: ${certs}`
+        }).join('\n'),
+      )
+    }
+  } catch (e) {
+    console.warn('jobs context fetch failed:', e instanceof Error ? e.message : e)
+  }
+
+  // Targeted: if user mentions a candidate by name, pull full profile + certs
+  try {
+    const lower = message.toLowerCase()
+    const { rows: matches } = await pool.query(
+      `SELECT c.id, c.name, c.email, c.phone, c.location, c.experience_years, c.primary_domain,
+              c.ai_summary, r.skills_list, r.education, r.languages, r.equipment_handled, r.raw_text
+       FROM candidates c
+       LEFT JOIN resumes r ON r.candidate_id = c.id
+       WHERE LOWER(c.name) <> '' AND POSITION(LOWER(c.name) IN $1) > 0
+       LIMIT 3`,
+      [lower],
+    )
+    for (const c of matches) {
+      const { rows: certs } = await pool.query(
+        `SELECT name, issuer, issue_date, expiry_date FROM certifications WHERE candidate_id = $1`,
+        [c.id],
+      )
+      sections.push(
+        `DETAILED PROFILE — ${c.name}:\n` +
+        `Email: ${c.email || 'N/A'} | Phone: ${c.phone || 'N/A'} | Location: ${c.location || 'N/A'}\n` +
+        `Experience: ${c.experience_years || 0} yrs | Domain: ${c.primary_domain || 'N/A'}\n` +
+        `Skills: ${Array.isArray(c.skills_list) ? c.skills_list.join(', ') : (c.skills_list || 'N/A')}\n` +
+        `Equipment: ${Array.isArray(c.equipment_handled) ? c.equipment_handled.join(', ') : (c.equipment_handled || 'N/A')}\n` +
+        `Languages: ${Array.isArray(c.languages) ? c.languages.join(', ') : (c.languages || 'N/A')}\n` +
+        `Education: ${c.education || 'N/A'}\n` +
+        `Summary: ${c.ai_summary || 'N/A'}\n` +
+        `Certifications: ${certs.map((ce) => `${ce.name}${ce.issuer ? ' (' + ce.issuer + ')' : ''}`).join('; ') || 'none'}`,
+      )
+    }
+  } catch (e) {
+    console.warn('detailed candidate fetch failed:', e instanceof Error ? e.message : e)
+  }
+
+  return sections.join('\n\n')
+}
 
 export function createAgentRouter(pool: Pool) {
   router.post('/chat', authenticate, async (req: AuthRequest, res: Response) => {
@@ -19,94 +110,35 @@ export function createAgentRouter(pool: Pool) {
         return res.status(400).json({ message: 'Message is required', code: 'MISSING_MESSAGE' })
       }
 
-      // Try to forward to Python AI service which has full Ollama/Gemini integration
-      try {
-        const aiRes = await aiClient.post('/api/agent/chat', {
-          message,
-          session_id: session_id || `session-${Date.now()}`,
-        })
-        return res.json(aiRes.data)
-      } catch (aiError) {
-        console.warn('AI service unavailable, falling back to direct Ollama call')
-      }
+      const sessionId: string = session_id || `session-${Date.now()}`
+      const history = getHistory(sessionId)
 
-      // Fallback: call Ollama directly from gateway if AI service is down
-      const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434'
-      const ollamaModel = process.env.OLLAMA_MODEL || 'llama3'
+      const ragContext = await buildRagContext(pool, message)
 
-      // Build candidate context from DB
-      let candidateContext = ''
-      try {
-        const candidates = await pool.query(
-          `SELECT c.id, c.name, c.status, c.location, r.experience_years, r.skills_list, r.primary_domain
-           FROM candidates c
-           LEFT JOIN resumes r ON r.candidate_id = c.id
-           ORDER BY c.created_at DESC
-           LIMIT 20`
-        )
-        if (candidates.rows.length > 0) {
-          candidateContext = 'Available candidates:\n' + candidates.rows.map((c, i) =>
-            `${i + 1}. ${c.name || 'Unknown'} | Domain: ${c.primary_domain || 'N/A'} | Exp: ${c.experience_years || 0} yrs | Skills: ${c.skills_list || 'N/A'} | Status: ${c.status} | Location: ${c.location || 'N/A'}`
-          ).join('\n')
-        }
-      } catch (dbErr) {
-        console.error('DB context fetch failed:', dbErr)
-      }
+      const systemPrompt = `You are Kshamata, an AI HR Assistant for an industrial recruitment platform serving heavy industry (Mining, Steel, Power Plants, Manufacturing, Logistics, Construction).
 
-      let jobContext = ''
-      try {
-        const jobs = await pool.query(
-          `SELECT title, location, experience_years_required, required_skills
-           FROM job_descriptions WHERE status = 'active' LIMIT 10`
-        )
-        if (jobs.rows.length > 0) {
-          jobContext = 'Active job openings:\n' + jobs.rows.map((j) =>
-            `- ${j.title} | Location: ${j.location || 'N/A'} | Exp: ${j.experience_years_required || 0}+ yrs | Skills: ${j.required_skills || 'N/A'}`
-          ).join('\n')
-        }
-      } catch (dbErr) {
-        console.error('Jobs context fetch failed:', dbErr)
-      }
-
-      const systemPrompt = `You are an AI HR Assistant for an industrial recruitment platform.
-You help recruiters find, evaluate, and compare candidates for heavy industry roles (Mining, Steel, Power Plants, Manufacturing, Logistics).
-
-${candidateContext ? candidateContext + '\n\n' : ''}${jobContext ? jobContext + '\n\n' : ''}
+${ragContext || '(No candidate or job data in the system yet.)'}
 
 Guidelines:
-- Base answers on the actual candidate data provided above
-- Highlight safety certifications (DGMS, OSHA, Boiler, Crane, Blasting) as critical
-- Be concise, professional, and data-driven
-- If asked about a candidate not in the list, say they are not in the database
-- Suggest interview questions when asked about specific candidates`
+- Ground every answer in the data provided above — never invent candidates or jobs.
+- For safety-critical industrial roles, flag relevant certifications: DGMS, OSHA, Boiler, Crane, Blasting, Mines Manager, First Aid.
+- Be concise, professional, data-driven. Use bullets and tables when comparing multiple candidates.
+- When asked to rank or match candidates to a job, compute and explain the match: skill overlap, experience gap, missing certifications, recommendation.
+- When asked to interview a candidate, generate 5-7 role-specific questions based on their actual skills and experience.
+- If a candidate or job isn't in the database, say so plainly.`
 
-      try {
-        const ollamaRes = await axios.post(
-          `${ollamaUrl}/api/chat`,
-          {
-            model: ollamaModel,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: message },
-            ],
-            stream: false,
-          },
-          { timeout: 120000 }
-        )
+      const messages: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        ...history.slice(-10),
+        { role: 'user', content: message },
+      ]
 
-        const response = ollamaRes.data?.message?.content || 'No response from LLM.'
-        return res.json({
-          response,
-          sessionId: session_id || `session-${Date.now()}`,
-          provider: 'ollama',
-        })
-      } catch (ollamaErr) {
-        console.error('Ollama call failed:', ollamaErr)
-        return res.status(503).json({
-          message: 'AI service unavailable. Ensure Ollama is running with a model loaded, or the Python AI service is started.',
-          code: 'LLM_UNAVAILABLE',
-        })
-      }
+      const { text, provider } = await chatLLM(messages)
+
+      history.push({ role: 'user', content: message })
+      history.push({ role: 'assistant', content: text })
+
+      return res.json({ response: text, sessionId, provider })
     } catch (error) {
       console.error('Agent chat error:', error)
       res.status(500).json({ message: 'Agent chat failed', code: 'AGENT_FAILED' })

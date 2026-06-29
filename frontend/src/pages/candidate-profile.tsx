@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -153,13 +154,20 @@ export function CandidateProfilePage() {
                         <Star className="h-4 w-4 text-accent" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium mb-1">Candidate Summary</p>
-                        <p className="text-sm leading-relaxed text-muted-foreground">
-                          {domain && `${candidate.name} is a ${domain} professional`}
-                          {experienceYears > 0 && ` with ${experienceYears} years of experience`}.
-                          {skills.length > 0 && ` Key skills include ${skills.slice(0, 5).join(', ')}.`}
-                          {certifications.length > 0 && ` Holds ${certifications.length} certification(s).`}
-                        </p>
+                        <p className="text-sm font-medium mb-1">AI Summary</p>
+                        {candidate.aiSummary ? (
+                          <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">{candidate.aiSummary}</p>
+                        ) : (
+                          <p className="text-sm leading-relaxed text-muted-foreground">
+                            {domain && `${candidate.name} is a ${domain} professional`}
+                            {experienceYears > 0 && ` with ${experienceYears} years of experience`}.
+                            {skills.length > 0 && ` Key skills include ${skills.slice(0, 5).join(', ')}.`}
+                            {certifications.length > 0 && ` Holds ${certifications.length} certification(s).`}
+                            {!candidate.aiSummary && (
+                              <span className="block text-xs italic mt-1 opacity-60">AI-generated summary will appear once parsing completes.</span>
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -241,11 +249,7 @@ export function CandidateProfilePage() {
                 </TabsContent>
 
                 <TabsContent value="notes">
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                    <p className="text-sm text-muted-foreground">Recruiter notes coming soon.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Use the AI Agent to generate notes and recommendations.</p>
-                  </div>
+                  <NotesTab candidateId={id!} />
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -257,3 +261,130 @@ export function CandidateProfilePage() {
 }
 
 
+
+interface Note {
+  id: string
+  body: string
+  author: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+function NotesTab({ candidateId }: { candidateId: string }) {
+  const qc = useQueryClient()
+  const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editBody, setEditBody] = useState('')
+
+  const { data: notes = [], isLoading } = useQuery<Note[]>({
+    queryKey: ['notes', candidateId],
+    queryFn: () => candidatesApi.listNotes(candidateId).then((r) => r.data),
+  })
+
+  const create = useMutation({
+    mutationFn: (body: string) => candidatesApi.createNote(candidateId, body),
+    onSuccess: () => {
+      setDraft('')
+      qc.invalidateQueries({ queryKey: ['notes', candidateId] })
+      toast.success('Note added')
+    },
+    onError: () => toast.error('Failed to add note'),
+  })
+
+  const update = useMutation({
+    mutationFn: ({ noteId, body }: { noteId: string; body: string }) =>
+      candidatesApi.updateNote(candidateId, noteId, body),
+    onSuccess: () => {
+      setEditingId(null)
+      qc.invalidateQueries({ queryKey: ['notes', candidateId] })
+      toast.success('Note updated')
+    },
+    onError: () => toast.error('Failed to update note'),
+  })
+
+  const del = useMutation({
+    mutationFn: (noteId: string) => candidatesApi.deleteNote(candidateId, noteId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notes', candidateId] })
+      toast.success('Note deleted')
+    },
+    onError: () => toast.error('Failed to delete note'),
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Add a recruiter note about this candidate..."
+          rows={3}
+          className="w-full rounded-md border bg-background p-3 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            disabled={!draft.trim() || create.isPending}
+            onClick={() => create.mutate(draft.trim())}
+          >
+            {create.isPending ? 'Adding...' : 'Add Note'}
+          </Button>
+        </div>
+      </div>
+
+      {isLoading && <p className="text-sm text-muted-foreground">Loading notes...</p>}
+
+      {!isLoading && notes.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">No notes yet. Add the first one above.</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {notes.map((n) => (
+          <div key={n.id} className="rounded-md border bg-muted/30 p-3 space-y-2">
+            {editingId === n.id ? (
+              <>
+                <textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border bg-background p-2 text-sm"
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                  <Button
+                    size="sm"
+                    disabled={!editBody.trim() || update.isPending}
+                    onClick={() => update.mutate({ noteId: n.id, body: editBody.trim() })}
+                  >Save</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm whitespace-pre-wrap">{n.body}</p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {n.author || 'recruiter'} · {new Date(n.createdAt).toLocaleString()}
+                    {n.updatedAt !== n.createdAt && ' (edited)'}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      className="hover:text-primary"
+                      onClick={() => { setEditingId(n.id); setEditBody(n.body) }}
+                    >Edit</button>
+                    <button
+                      className="hover:text-destructive"
+                      onClick={() => del.mutate(n.id)}
+                    >Delete</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
